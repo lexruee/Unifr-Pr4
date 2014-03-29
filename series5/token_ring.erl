@@ -1,69 +1,107 @@
+%%%---------------------------------------------------------------------
+%%% University of Fribourg 
+%%% Project 4: Concurrent, Parallel and Distributed Computing
+%%%
+%%% @author		Alexander Rüedlinger, Michael Jungo
+%%% @date		2014
+%%% @version		see git history
+%%% @description 	Solution for exercise series 5.
+%%%---------------------------------------------------------------------
+
 -module(token_ring).
--export([start/2, init/2, collector/2, loop/3, startRec/4]).
+-export([start/3, master/3, actor/4]).
+
+
+%% @spec start(N::int(),M::int()) -> int().
+start(N,M,I) -> 
+	out("",[],write), % overwrite output file	
+	spawn(token_ring,master,[N,M,I]).
+
+% Deploys n processes.
+deploy(0,_,Pid) -> 
+	self() ! {deployed,Pid},
+	Pid;
+
+deploy(N,M,SuccPid) ->
+	Pid = spawn(token_ring,actor,[N,M,SuccPid,0]),
+	out("deployed process ~p: pid: ~p\n",[N,Pid],append),		
+	deploy(N-1,M,Pid).
+
+
+master(N,M,I) -> 
+	deploy(N,M,self()),
+	waitOnDeployment(M,I).
 
 %
-% Work in progress.
-% Done:
-%	- create n processes
-%	- counter
+% @spec waitOnDeployment(M::int()) -> pid()
 %
-%	Todo:
-%	collector process
-%		- collect stats
-%	token
-
-% start init/collector process
-start(N,M) -> spawn(token_ring, init,[N,M]).
-
-init(N,M) -> 
-	% create N processes
-	LastPid = startRec(N,M,self(),self()),
-	collector(M,LastPid). % run collector loop
-
-collector(M,SuccPid) -> 
+waitOnDeployment(M,I) ->
 	receive
-		{counter,CounterValue} when CounterValue==M ->
-			io:format("stopped\n"),
-			self() ! {stopped};
-		{counter,CounterValue} when CounterValue < M->
-			io:format("Collector Process: ~p, counter: ~p \n", [self(),CounterValue+1]),
-			SuccPid ! {counter,CounterValue+1};
-			% pass counter value to the start of the ring.
-		{stopped} ->
-			io:format("stopped\n"),
-			SuccPid ! {getState};
-		{collect_state,Counter,Pid} ->
-			io:format("pid: ~p, counter: ~p\n",[Pid,Counter])
+		{deployed,SuccPid} -> out("all processes are deployed!\n",[],append),
+		SuccPid ! {find,I}, %find i-th node 
+		actor(I,M,SuccPid,0)
 	end,
-	collector(M,SuccPid).
+	waitOnDeployment(M,I).
+
+%
+% Main actor function.
+% @spec actor(M::int(),SuccPid::pid(),Counter::int()) -> stop
+%
+actor(I,M,SuccPid,Counter) ->
+	receive	
+		% find i-th node and start counting and send token
+		{find,Id} when I == Id ->
+			out("N ~p, pid: ~p, succ pid: ~p, send token!\n",[I,self(),SuccPid],append),
+			SuccPid ! {counter,0,self(),token};
+ 
+		{find,Id} when I /= Id ->
+			SuccPid ! {find,Id}; 
 
 
-% create N processes
-startRec(0,_,Pid,_) -> Pid ! {counter,0}, Pid; %if all processes are 
-% created then start counting.
+		% if a counter message is received then increment the counter and
+		% send it to its successor.		
+		{counter,CounterValue,MasterPid,token} when CounterValue < M -> 
+			out("N: ~p, pid: ~p, succ: ~p, received c: ~p: , set c to ~p\n",[I,self(),SuccPid,CounterValue,CounterValue+1],append),
+			SuccPid ! {counter,CounterValue+1,MasterPid,token},
+			actor(I,M,SuccPid,CounterValue); % propagate the message in the ring
 
-startRec(N,M,SuccPid,FirstPid) -> 
-	Pid = spawn(token_ring, loop, [M,SuccPid,FirstPid]),
-	io:format("N: ~p, Create Process: ~p\n", [N,Pid]),
-	startRec(N-1,M,Pid,FirstPid).
+		{counter,CounterValue,MasterPid,token} when CounterValue==M ->
+			MasterPid ! {stopped};
+
+		% if the master receives a stopped message 
+		% then start collecting the current states of each ring process.
+		{stopped} -> 
+			out("received stopped message!\n",[],append),
+		SuccPid ! {state,self()};
+
+		% if a process receives a state message then send back 
+		% the master its current state
+		{state,MasterPid} when MasterPid /= self() ->
+			MasterPid ! {collect,self(),SuccPid,Counter},
+			SuccPid ! {state,MasterPid}, % propagate the message in the ring
+			shutdown();
+
+		{state,MasterPid} when MasterPid == self() ->
+			MasterPid ! {collect,self(),SuccPid,Counter},
+			shutdown();
+
+		% if the master receives a collect message
+		% then write the results into a file
+		{collect,Pid,SPid,CValue} ->
+			out("report state of ~p: succ pid: ~p, counter: ~p\n",[Pid,SPid,CValue],append)
+
+	end, 
+	actor(I,M,SuccPid,Counter).
+
+shutdown() -> stop.
 
 
-loop(M,SuccPid,FirstPid) -> 
-	receive
-		{counter,CounterValue} when CounterValue==M ->
-			FirstPid ! {stopped,self()};
-			
-		{counter,CounterValue} when CounterValue < M ->
-			io:format("Process: ~p, counter: ~p \n", [self(),CounterValue+1]),
-			SuccPid ! {counter,CounterValue+1};
-			
-		{get_state} ->
-			FirstPid ! {collect_state,0,self()},
-			io:format("sdd\n"),
-			SuccPid ! {get_state}
-	end,
-	loop(M,SuccPid,FirstPid).
-
-
+% Writes a formatted string into a file.
+% @spec actor(Str::string(),L::list(),Mode::atom()) -> stop
+%
+out(Str,L,Mode) ->
+	{ok, IO} = file:open("./tr.hrl",[Mode]),
+	io:fwrite(IO,Str,L),
+	stop.
 
 
