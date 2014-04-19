@@ -5,7 +5,7 @@
 % start
 %
 start() ->
-   % read graph topology
+   % read graph topology from file
     {ok,Graph} = file:consult('graph.txt'),
     % read nodes list
     {ok,[MasterId|Nodes]} = file:consult('enodes.txt'),
@@ -100,7 +100,7 @@ nodeActor(loop,{Label,LookupTable,Successors,Pred,D,Num}) ->
         % Phase 1 for process p_j, j > 1, intermediate nodes
         %---------------------------------------------------------------
         
-        % Handle length messeage if S < D.
+        % Handle length message if S < D.
         % If true the current node has found a shorter path to the
         % initiator node via node P. Inform all other nodes except Pred
         % that an improved path has been found.
@@ -179,7 +179,7 @@ nodeActor(loop,{Label,LookupTable,Successors,Pred,D,Num}) ->
             [ io:format("send length message from ~p to ~p, ~p, s: ~p, w: ~p, s+w: ~p\n",
             [Label,V,dict:fetch(V,LookupTable),0,W,0+W]) || [V,W] <- Successors ],
             
-            % senf length message to all successor nodes
+            % send length message to all successor nodes
             % and set this node as initiator
             Initiator = self(),
             [ NodeId ! {lengthMessage,self(),W,Initiator} || [NodeId,W] <- Successors],
