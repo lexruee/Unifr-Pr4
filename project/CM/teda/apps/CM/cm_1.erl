@@ -152,7 +152,12 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
         %
         {lookupTable,Table} ->
             NewLookupTable = dict:from_list(Table),
-            LookupFun = fun(Key) -> dict:fetch(Key,NewLookupTable) end,
+            LookupFun = fun(Key) -> 
+                case Key==nil of
+                    true -> nil;
+                    false ->  dict:fetch(Key,NewLookupTable)
+                end
+            end,
             io:format("lookup table: ~p\n",[Table]),
             NewLabel = LookupFun(self()), %dict:fetch(self(),NewLookupTable),
             
@@ -213,7 +218,7 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
         
         % Handle ack message.
         %
-        {ack,P,Initiator} when Initiator/=self(),State==run ->
+        {ack,P,Initiator} when Initiator/=self() ->
             % print statements for debugging
             io:format("~p, received ack from ~p, ~p\n",[Label,P,Lookup(P)]),
             
@@ -256,7 +261,7 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
         % Handle length message.
         % Send for each received length messages an ack message if S>=0.
         %
-        {lengthMessage,P,S,Initiator} when S>=0, self()==Initiator,State==run ->
+        {lengthMessage,P,S,Initiator} when S>=0, self()==Initiator ->
             P ! {ack,self(),Initiator}, % return ack to P
         nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num});
         
@@ -275,18 +280,14 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
             end,
             nodeActor(run,{MasterNode,Label,Lookup,Successors,Pred,D,NewNum});
            
-            % Handle collect messages sent by the master node.
-            % Send back the current state of this node.
-            %
-            {collect} ->
-                io:format("received collect request\n",[]),
-                PredNodeLabel = case Pred==nil of
-                    true -> nil;
-                    false -> Lookup(Pred)
-                end,
-                MasterNode ! {collect,[Label,D,PredNodeLabel],self()},
-                nodeActor(run,{MasterNode,Label,Lookup,Successors,Pred,D,Num})
-          
+        % Handle collect messages sent by the master node.
+        % Send back the current state of this node.
+        %
+        {collect} ->
+            io:format("received collect request\n",[]),
+            MasterNode ! {collect,[Label,D,Lookup(Pred)],self()},
+            nodeActor(run,{MasterNode,Label,Lookup,Successors,Pred,D,Num})
+                  
     end.
 
 %

@@ -1,4 +1,4 @@
--module(cm).
+-module(cm_2).
 -export([start/1,nodeActor/0,aggregate/2,aggregate_modulo/4]). 
 %
 % Simplified CM version for non-negative graphs with termination.
