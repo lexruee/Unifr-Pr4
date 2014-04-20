@@ -1,7 +1,7 @@
--module(cm).
+-module(cm_1).
 -export([start/1,nodeActor/0,aggregate/2,aggregate_modulo/4]). 
 %
-% Simplified CM version for non-negative graphs with termination.
+% Simplified CM version for non-negative graphs without termination.
 % Solution for series 8-10.
 %
 % author:   Alexander Rüedlinger, Michael Jungo
@@ -75,13 +75,26 @@ masterActor(Nodes,Graph) ->
 %
 % After the computation is finished it collects the results of all nodes.
 %
-% @spec collect(Pids::list(),Result:list(),NodeLabels::list()) -> any()
-collect([],Result,NodeLabels) ->
-    Edges = [ [V,W,U] || [V,W,U] <- Result,U/=nil],
-    io:format("\nfinshihed, results:\nnodes: ~p\nedges: ~p\n\n",[NodeLabels,Edges]);
-    
+% @spec collect(Pids::list(),Result:list(),NodeLabels::list()) -> any()    
 collect(Pids,Result,NodeLabels) ->
+    case length(Pids)==0 of
+        true -> Edges = [ [V,W,U] || [V,W,U] <- Result,U/=nil],
+                io:format("\nfinshihed, results:\nnodes: ~p\nedges: ~p\n\n",[NodeLabels,Edges]),
+                collect([nil],Result,NodeLabels);
+        false -> do_nothing
+    end,
+        
     receive
+        
+        %
+        % Handle finish message.
+        % Received if the initator node detects that the computation 
+        % is over.
+        %
+        {finished} ->
+            % collect current state for all nodes.
+            [ NodeId ! {collect} || NodeId <- Pids ],
+            collect(Pids,Result,NodeLabels);
     
         %
         % Initiates phase 1 of the CM algorithm
@@ -90,8 +103,9 @@ collect(Pids,Result,NodeLabels) ->
             Root ! {initiator,self()},
             collect(Pids,Result,NodeLabels);
         
-        %
+        % Handle collect messages.
         % Receive collect messages and collect the results.
+        %
         {collect,State,NodePid} ->
             % Remove corresponding Pid for each received collect message.
             NPids = lists:filter(fun(Pid) -> Pid/=NodePid end,Pids),
@@ -108,11 +122,6 @@ nodeActor() ->
 
 %
 % @spec masterActor(State::atom(),Variables::tuple()) -> any()
-nodeActor(terminate,{MasterNode,[V,W,Pred]}) ->
-    State = [V,W,Pred],
-    io:format("terminate node ~p, with state: ~p\n",[V,State]),
-    MasterNode ! {collect,State,self()};
-    
 nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
     % print statements for debugging
     case Pred  of
@@ -251,7 +260,6 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
             P ! {ack,self(),Initiator}, % return ack to P
         nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num});
         
-        
         % Handle ack message.
         % Decrement Num counter for each received ack message.
         % If Num==0 start phase 2.
@@ -262,30 +270,24 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
             
             NewNum = Num - 1,
             case NewNum==0 of
-                true -> 
-                        io:format("start phase 2, send stop to succs.\n"),
-                        % Phase 2, 
-                        % send stop message to all successor nodes.
-                        [ NodeId ! {stop} || [NodeId,_] <- Successors ],
-                        nodeActor(terminate,{MasterNode,Label,Lookup,Successors,Pred,D,NewNum});
-                false -> 
-                        nodeActor(run,{MasterNode,Label,Lookup,Successors,Pred,D,NewNum})
-            end;
+                true -> MasterNode ! {finished};
+                false -> do_nothing
+            end,
+            nodeActor(run,{MasterNode,Label,Lookup,Successors,Pred,D,NewNum});
            
-            %-----------------------------------------------------------
-            % Phase 2 for intermediate node, p_j, j>1,
-            %-----------------------------------------------------------
-            {stop} ->
-                io:format("received stop..\n",[]),
-                [NodeId ! {stop} || [NodeId,_] <- Successors],
+            % Handle collect messages sent by the master node.
+            % Send back the current state of this node.
+            %
+            {collect} ->
+                io:format("received collect request\n",[]),
                 PredNodeLabel = case Pred==nil of
                     true -> nil;
                     false -> Lookup(Pred)
                 end,
-                nodeActor(terminate,{MasterNode,[Label,D,PredNodeLabel]})
+                MasterNode ! {collect,[Label,D,PredNodeLabel],self()},
+                nodeActor(run,{MasterNode,Label,Lookup,Successors,Pred,D,Num})
           
     end.
-
 
 %
 % createLookupTable():
