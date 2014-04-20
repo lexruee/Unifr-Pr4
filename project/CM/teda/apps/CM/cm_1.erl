@@ -170,7 +170,7 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
         % initiator node via node P. Inform all other nodes except Pred
         % that an improved path has been found.
         %
-        {lengthMessage,P,S,Initiator} when S < D; D == infinity,State==run -> % number < atom 
+        {lengthMessage,P,S,Initiator} when S < D,Initiator/=self(); D == infinity,Initiator/=self() -> % number < atom 
             % print statements for debugging
             io:format("~p, received lengh message S < D from ~p, ~p \n",[Label,P,Lookup(P)]),
             
@@ -207,7 +207,7 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
         % Received message does not lead to a shorter path, so
         % discard it and just send an ack.
         %
-        {lengthMessage,P,S,Initiator} when S>= D, self()/=Initiator,State==run ->
+        {lengthMessage,P,S,Initiator} when S>= D, self()/=Initiator ->
             P ! {ack,self(),Initiator},
             nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}); % <----- fix
         
