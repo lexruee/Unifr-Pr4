@@ -166,7 +166,7 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
         % initiator node via node P. Inform all other nodes except Pred
         % that an improved path has been found.
         %
-        {lengthMessage,P,S,Initiator} when S < D,Initiator/=self(); D == infinity,Initiator/=self() -> % number < atom 
+        {lengthMessage,P,S,Initiator} when S<D,Initiator/=self(); D==infinity,Initiator/=self() -> % number < atom 
             % print statements for debugging
             io:format("~p, received lengh message S < D from ~p, ~p \n",[Label,P,Lookup(P)]),
             
@@ -295,7 +295,7 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
         % negative cycle has been detected.
         %
         {lengthMessage,P,S,Initiator} when S<0, self()==Initiator ->
-            io:format(">>>>>>>>>>>>>>>>>>>>>> negative cycle detected!\n",[]),
+            io:format(">>>>>>>>>>>>>>>>>>>>>> negative cycle detected, ~p!\n",[Lookup(P)]),
             [ NodeId ! {stop} || [NodeId,_] <- Successors ],
             nodeActor(terminate,{MasterNode,Label,Lookup,Successors,Pred,D,Num})
     end.
