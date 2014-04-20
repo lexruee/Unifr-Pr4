@@ -1,29 +1,37 @@
 -module(cm).
--export([start/0,masterActor/2,aggregate/2,aggregate_modulo/4]). 
+-export([start/1,aggregate/2,aggregate_modulo/4]). 
 %
 % Simplified CM version for non-negative graphs with termination.
+% Solution for series 8-10.
 %
-% 
+% author:   Alexander Rüedlinger, Michael Jungo
+% date:     2014
+% lecture:  Project 4: Concurrent, Parallel and Distributed Computing
 %
 
 
 %
-% start
+% start():
+% Starts the simplified CM algorithm.
+% The start function takes as an argument the name of a "graph" file
+% without the .txt extension. E.g.: file = graph.txt, start("graph") 
 %
-start() ->
-   % read graph topology from file
-    {ok,Graph} = file:consult('graph.txt'),
+% @spec masterActor(Nodes::list(),Graph::list()) -> any()
+start(File) ->
+    % read graph topology from file
+    Filename = list_to_atom(File++".txt"),
+    io:format("llll ~p\n",[Filename]),
+    {ok,Graph} = file:consult(Filename),
     % read nodes list
-    {ok,[MasterId|Nodes]} = file:consult('enodes.txt'),
+    {ok,[_|Nodes]} = file:consult('enodes.txt'),
     % checks if node is master or not
-    case node() of
-        MasterId -> masterActor(Nodes,Graph);
-        _ -> nodeActor()
-    end.
+    masterActor(Nodes,Graph).
 
 %
+% masterActor():
 % Master actor.
 %
+% @spec masterActor(Nodes::list(),Graph::list()) -> any()
 masterActor(Nodes,Graph) ->
     % map vertices on nodes
     Map = aggregate(Nodes,Graph),
@@ -31,7 +39,7 @@ masterActor(Nodes,Graph) ->
     io:format("map ~p\n",[Map]),
     
     % deploy node processes
-    Pids = [ spawn(NodeId,?MODULE, start,[]) || {NodeId,_} <- Map ],
+    Pids = [ spawn(NodeId, fun() -> nodeActor() end) || {NodeId,_} <- Map ],
     % create look up table for node label v_i -> pid translation
     LookupTable = createLookupTable(Pids,Map),
     
@@ -58,12 +66,14 @@ masterActor(Nodes,Graph) ->
     collect(Pids,[],NodeLabels).
     
 %
+% collect():
 % Collect fucntion for master actor.
 % Receives an init message and setups the initiator node 
 % for starting the CM algorithm.
 %
 % After the computation is finished it collects the results of all nodes.
 %
+% @spec collect(Pids::list(),Result:list(),NodeLabels::list()) -> any()
 collect([],Result,NodeLabels) ->
     Edges = [ [V,W,U] || [V,W,U] <- Result,U/=nil],
     io:format("\nfinshihed, results:\nnodes: ~p\nedges: ~p\n\n",[NodeLabels,Edges]);
@@ -87,9 +97,15 @@ collect(Pids,Result,NodeLabels) ->
     end.
     
 %
+% nodeActor():
 % Node actor.
 %
-    
+% @spec nodeActor() -> any()
+nodeActor() -> 
+    nodeActor(run,{nil,nil,dict:new(),[],nil,infinity,0}).
+
+%
+% @spec masterActor(State::atom(),Variables::tuple()) -> any()
 nodeActor(terminate,{MasterNode,[V,W,Pred]}) ->
     State = [V,W,Pred],
     io:format("terminate node ~p, with state: ~p\n",[V,State]),
@@ -267,14 +283,12 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
     end.
 
 
-nodeActor() -> 
-    nodeActor(run,{nil,nil,dict:new(),[],nil,infinity,0}).
-
-
 %
+% createLookupTable():
 % Creates a lookup table for translating a node label 
 % into a node process pid
 %
+% @spec createLookupTable(Pids:list(),Map::dict()) -> dict()
 createLookupTable(Pids,Map) ->
     % associate pids with graph vertices
     Tmp = [ {K,L} || {K,{_,L}} <- lists:zip(Pids,Map)],
@@ -283,9 +297,11 @@ createLookupTable(Pids,Map) ->
     dict:from_list(KeyVal).
 
 %
+% createInverseLookupTable():
 % Creates a lookup table for translating  a process pid into
 % a node label.
 %
+% @spec createInverseLookupTable(Pids:list(),Map::dict()) -> dict()
 createInverseLookupTable(Pids,Map) ->
     % associate pids with graph vertices
     Tmp = [{K,L} || {K,{_,L}} <- lists:zip(Pids,Map)],
@@ -294,9 +310,11 @@ createInverseLookupTable(Pids,Map) ->
     dict:from_list(ValKey).
 
 %
+% translateGraph():
 % Translates all node labels in a graph (represented as an adjacency list)
 % by using the provided "translation" dictionary / lookup table. 
 %
+% @spec createLookupTable(Graph:list(),Dict::dict()) -> list()
 translateGraph(Graph,Dict) ->
     % translate old Graph with lookup table
     GraphN = lists:map(fun([Label,Vs]) -> [ dict:fetch(Label,Dict), lists:map(fun([K,W]) -> [dict:fetch(K,Dict),W] end,Vs) ] end, Graph),
