@@ -272,18 +272,30 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
                         nodeActor(run,{MasterNode,Label,Lookup,Successors,Pred,D,NewNum})
             end;
            
-            %-----------------------------------------------------------
-            % Phase 2 for intermediate node, p_j, j>1,
-            %-----------------------------------------------------------
-            {stop} ->
-                io:format("received stop..\n",[]),
-                [NodeId ! {stop} || [NodeId,_] <- Successors],
-                PredNodeLabel = case Pred==nil of
-                    true -> nil;
-                    false -> Lookup(Pred)
-                end,
-                nodeActor(terminate,{MasterNode,[Label,D,PredNodeLabel]})
-          
+        %---------------------------------------------------------------
+        % Phase 2 for intermediate node, p_j, j>1,
+        %---------------------------------------------------------------
+        {stop} ->
+            io:format("received stop..\n",[]),
+            [NodeId ! {stop} || [NodeId,_] <- Successors],
+            PredNodeLabel = case Pred==nil of
+                true -> nil;
+                false -> Lookup(Pred)
+            end,
+            nodeActor(terminate,{MasterNode,[Label,D,PredNodeLabel]});
+            
+        %---------------------------------------------------------------
+        % Phase 2 for initator node, p_j, j=1,
+        %---------------------------------------------------------------
+            
+        % Detect negative cycles as soon as possible.
+        % Send stop message to all successors of this node if
+        % negative cycle has been detected.
+        %
+        {lengthMessage,P,S,Initiator} when S<0, self()==Initiator ->
+            io:format(">>>>>>>>>>>>>>>>>>>>>> negative cycle detected!\n",[]),
+            [ NodeId ! {stop} || [NodeId,_] <- Successors ],
+            nodeActor(terminate,{MasterNode,Label,Lookup,Successors,Pred,D,Num})
     end.
 
 
