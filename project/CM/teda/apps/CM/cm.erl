@@ -1,5 +1,11 @@
 -module(cm).
--export([start/0,masterActor/2,aggregate/2,aggregate_modulo/4,wait/2]). 
+-export([start/0,masterActor/2,aggregate/2,aggregate_modulo/4]). 
+%
+% Simplified CM version for non-negative graphs with termination.
+%
+% 
+%
+
 
 %
 % start
@@ -19,15 +25,14 @@ start() ->
 % Master actor.
 %
 masterActor(Nodes,Graph) ->
-    io:format("master, neighbors ~p\n",[nil]),
     % map vertices on nodes
     Map = aggregate(Nodes,Graph),
-    NodeLabels = lists:map(fun({_,[Label|_]}) -> Label end,Map),
+    NodeLabels = [ Label || {_,[Label|_]} <- Map ],
     io:format("map ~p\n",[Map]),
     
     % deploy node processes
     Pids = [ spawn(NodeId,?MODULE, start,[]) || {NodeId,_} <- Map ],
-    % create look up table for node label and process pid translation
+    % create look up table for node label v_i -> pid translation
     LookupTable = createLookupTable(Pids,Map),
     
     % translate original graph into a graph with pids
@@ -36,10 +41,10 @@ masterActor(Nodes,Graph) ->
     % let each node know his successors
     [ NodeId ! {successors,Successors} || [NodeId,Successors] <- GraphN ],
     
-    % give each node process a node label
+    % give each node process a node label v0,v1,v2 etc.
     [ NodeId ! {label,Label} || {NodeId,Label} <- lists:zip(Pids,NodeLabels) ],
     
-    % distribute inverse lookup table
+    % distribute inverse lookup table for pids -> v_i translation
     InverseLookupTable = createInverseLookupTable(Pids,Map),
     io:format("distribute table: ~p\n",[dict:to_list(InverseLookupTable)]),
     [ NodeId ! {lookupTable,dict:to_list(InverseLookupTable)} || NodeId <- Pids ],
@@ -47,36 +52,48 @@ masterActor(Nodes,Graph) ->
     % set master node for all nodes.
     [ NodeId ! {masterNode,self()} || NodeId <- Pids ],
             
-    % after 7 seconds start phase 1 and set RootNode as initiator
+    % after 4 seconds start phase 1 and set RootNode as initiator
     [RootNode|_] = Pids,
     erlang:send_after(4000,self(),{init,RootNode}),
-    wait(length(Pids),[]).
+    collect(Pids,[],NodeLabels).
     
 %
-% Wait loop for master actor.
+% Collect fucntion for master actor.
 % Receives an init message and setups the initiator node 
-% for starting the cm algorithm.
+% for starting the CM algorithm.
 %
-wait(0,Result) ->
-    io:format("finished: ~p\n",[Result]);
+% After the computation is finished it collects the results of all nodes.
+%
+collect([],Result,NodeLabels) ->
+    Edges = [ [V,W,U] || [V,W,U] <- Result,U/=nil],
+    io:format("\nfinshihed, results:\nnodes: ~p\nedges: ~p\n\n",[NodeLabels,Edges]);
     
-wait(Num,Result) ->
+collect(Pids,Result,NodeLabels) ->
     receive
+    
+        %
+        % Initiates phase 1 of the CM algorithm
+        % and sets Root as iniator node.
         {init,Root} ->
             Root ! {initiator,self()},
-            wait(Num,Result);
+            collect(Pids,Result,NodeLabels);
         
-        {collect,Label} ->
-            wait(Num-1,Result ++ [Label])
+        %
+        % Receive collect messages and collect the results.
+        {collect,State,NodePid} ->
+            % Remove corresponding Pid for each received collect message.
+            NPids = lists:filter(fun(Pid) -> Pid/=NodePid end,Pids),
+            collect(NPids,lists:sort(Result ++ [State]),NodeLabels)
     end.
     
 %
 % Node actor.
 %
     
-nodeActor(terminate,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
-    io:format("terminate ~p\n",[Label]),
-    MasterNode ! {collect,Label};
+nodeActor(terminate,{MasterNode,[V,W,Pred]}) ->
+    State = [V,W,Pred],
+    io:format("terminate node ~p, with state: ~p\n",[V,State]),
+    MasterNode ! {collect,State,self()};
     
 nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
     % print statements for debugging
@@ -156,7 +173,6 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
                 true -> NewPred ! {ack,self(),Initiator};
                 false -> nil
             end,
-            
             nodeActor(State,{MasterNode,Label,Lookup,Successors,NewPred,NewD,NewNum});
         
         % Handle length message if S >= D.
@@ -179,7 +195,6 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
                 true -> Pred ! {ack,self(),Initiator};
                 false -> do_nothing
             end,
-
             nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,NewNum});
         
         
@@ -226,30 +241,28 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
             [Label,P,Lookup(P)]),
             
             NewNum = Num - 1,
-            % hack alert
-            [NState|_] = case NewNum==0 of
-                true -> [terminate,
-                            io:format("start phase 2, send stop to succs.\n"),
-                            % Phase 2, 
-                            % send over? message to all successor nodes.
-                            [ NodeId ! {stop} || [NodeId,_] <- Successors ]
-                        ];
-                false -> [run]
-            end,
-            nodeActor(NState,{MasterNode,Label,Lookup,Successors,Pred,D,NewNum});
+            case NewNum==0 of
+                true -> 
+                        io:format("start phase 2, send stop to succs.\n"),
+                        % Phase 2, 
+                        % send stop message to all successor nodes.
+                        [ NodeId ! {stop} || [NodeId,_] <- Successors ],
+                        nodeActor(terminate,{MasterNode,Label,Lookup,Successors,Pred,D,NewNum});
+                false -> 
+                        nodeActor(run,{MasterNode,Label,Lookup,Successors,Pred,D,NewNum})
+            end;
            
-
             %-----------------------------------------------------------
             % Phase 2 for intermediate node, p_j, j>1,
             %-----------------------------------------------------------
-            {stop} when D/=negInfinity ->
+            {stop} ->
                 io:format("received stop..\n",[]),
                 [NodeId ! {stop} || [NodeId,_] <- Successors],
                 PredNodeLabel = case Pred==nil of
                     true -> nil;
                     false -> Lookup(Pred)
                 end,
-                nodeActor(terminate,{MasterNode,{Label,D,PredNodeLabel},Lookup,Successors,Pred,negInfinity,Num})
+                nodeActor(terminate,{MasterNode,[Label,D,PredNodeLabel]})
           
     end.
 
@@ -264,9 +277,9 @@ nodeActor() ->
 %
 createLookupTable(Pids,Map) ->
     % associate pids with graph vertices
-    Tmp = lists:map(fun({K,{_,L}}) -> {K,L} end, lists:zip(Pids,Map)),
+    Tmp = [ {K,L} || {K,{_,L}} <- lists:zip(Pids,Map)],
     % make a lookup table for pids and vertices.    
-    KeyVal = lists:map(fun({Val,[Key|_]}) -> {Key,Val} end, Tmp),
+    KeyVal = [{Key,Val} || {Val,[Key|_]} <- Tmp],
     dict:from_list(KeyVal).
 
 %
@@ -275,9 +288,9 @@ createLookupTable(Pids,Map) ->
 %
 createInverseLookupTable(Pids,Map) ->
     % associate pids with graph vertices
-    Tmp = lists:map(fun({K,{_,L}}) -> {K,L} end, lists:zip(Pids,Map)),
+    Tmp = [{K,L} || {K,{_,L}} <- lists:zip(Pids,Map)],
     % make a lookup table for pids and vertices.    
-    ValKey = lists:map(fun({Val,[Key|_]}) -> {Val,Key} end, Tmp),
+    ValKey = [ {Val,Key} || {Val,[Key|_]} <- Tmp],
     dict:from_list(ValKey).
 
 %
