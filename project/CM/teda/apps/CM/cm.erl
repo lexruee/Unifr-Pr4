@@ -1,5 +1,5 @@
 -module(cm).
--export([start/0,masterActor/2,nodeActor/0,aggregate/2,aggregate_modulo/4,wait/0]). 
+-export([start/0,masterActor/2,aggregate/2,aggregate_modulo/4,wait/2]). 
 
 %
 % start
@@ -43,38 +43,58 @@ masterActor(Nodes,Graph) ->
     InverseLookupTable = createInverseLookupTable(Pids,Map),
     io:format("distribute table: ~p\n",[dict:to_list(InverseLookupTable)]),
     [ NodeId ! {lookupTable,dict:to_list(InverseLookupTable)} || NodeId <- Pids ],
-    
+   
+    % set master node for all nodes.
+    [ NodeId ! {masterNode,self()} || NodeId <- Pids ],
+            
     % after 7 seconds start phase 1 and set RootNode as initiator
     [RootNode|_] = Pids,
-    erlang:send_after(7000,self(),{init,RootNode}),
-    wait().
+    erlang:send_after(4000,self(),{init,RootNode}),
+    wait(length(Pids),[]).
     
 %
 % Wait loop for master actor.
 % Receives an init message and setups the initiator node 
 % for starting the cm algorithm.
 %
-wait() ->
+wait(0,Result) ->
+    io:format("finished: ~p\n",[Result]);
+    
+wait(Num,Result) ->
     receive
         {init,Root} ->
-            Root ! {initiator}
-    end,
-    wait().
+            Root ! {initiator,self()},
+            wait(Num,Result);
+        
+        {collect,Label} ->
+            wait(Num-1,Result ++ [Label])
+    end.
     
 %
 % Node actor.
 %
-nodeActor(loop,{Label,LookupTable,Successors,Pred,D,Num}) ->
+    
+nodeActor(terminate,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
+    io:format("terminate ~p\n",[Label]),
+    MasterNode ! {collect,Label};
+    
+nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
     % print statements for debugging
     case Pred  of
-        nil -> io:format("~p, num: ~p, d: ~p, pred: nil\n",[Label,Num,D]);
-        _ -> io:format("~p, num: ~p, d: ~p, pred: ~p\n",[Label,Num,D,dict:fetch(Pred,LookupTable)])
+        nil -> io:format("~p, ~p, num: ~p, d: ~p, pred: nil\n",[self(),Label,Num,D]);
+        _ -> io:format("~p, ~p, num: ~p, d: ~p, pred: ~p\n",[self(),Label,Num,D,Lookup(Pred)])
     end,
-    
+      
     receive
         %---------------------------------------------------------------
         % Initialization messages for intermediate nodes.
         %---------------------------------------------------------------
+        
+        %
+        % Setup master node
+        {masterNode,NewMasterNode} ->
+            nodeActor(State,{NewMasterNode,Label,Lookup,Successors,Pred,D,Num});
+        
         
         % Setup successors nodes for this node.
         %
@@ -82,19 +102,20 @@ nodeActor(loop,{Label,LookupTable,Successors,Pred,D,Num}) ->
             io:format("~p, ~p, ~p: received successors: ~p\n",
             [Label,node(),self(),NewSuccessors]),
             
-            nodeActor(loop,{Label,LookupTable,NewSuccessors,Pred,D,Num});
+            nodeActor(State,{MasterNode,Label,Lookup,NewSuccessors,Pred,D,Num});
         
         % Setup lookup table.
         %
         {lookupTable,Table} ->
             NewLookupTable = dict:from_list(Table),
+            LookupFun = fun(Key) -> dict:fetch(Key,NewLookupTable) end,
             io:format("lookup table: ~p\n",[Table]),
-            NewLabel = dict:fetch(self(),NewLookupTable),
+            NewLabel = LookupFun(self()), %dict:fetch(self(),NewLookupTable),
             
             io:format("~p, ~p, ~p: received table and label: ~p\n",
             [Label,node(),self(),NewLabel]),
             
-            nodeActor(loop,{NewLabel,NewLookupTable,Successors,Pred,D,Num});
+            nodeActor(State,{MasterNode,NewLabel,LookupFun,Successors,Pred,D,Num});
         
         %---------------------------------------------------------------
         % Phase 1 for process p_j, j > 1, intermediate nodes
@@ -105,10 +126,9 @@ nodeActor(loop,{Label,LookupTable,Successors,Pred,D,Num}) ->
         % initiator node via node P. Inform all other nodes except Pred
         % that an improved path has been found.
         %
-        {lengthMessage,P,S,Initiator} when S < D; D == infinity ->
+        {lengthMessage,P,S,Initiator} when S < D; D == infinity,State==run -> % number < atom 
             % print statements for debugging
-            io:format("~p, received lengh message S < D from ~p, ~p \n",
-            [Label,P,dict:fetch(P,LookupTable)]),
+            io:format("~p, received lengh message S < D from ~p, ~p \n",[Label,P,Lookup(P)]),
             
             % send an ack to the old predecessor, before changing it.
             case Num > 0 of
@@ -123,7 +143,7 @@ nodeActor(loop,{Label,LookupTable,Successors,Pred,D,Num}) ->
             
             % print statements for debugging
             [ io:format("send length message from ~p to ~p, ~p, s: ~p, w: ~p, s+w: ~p\n",
-            [Label,V,dict:fetch(V,LookupTable),S,W,S+W]) || [V,W] <- Successors ],
+            [Label,V,Lookup(V),S,W,S+W]) || [V,W] <- Successors ],
             
             % send length messages to all successors of this node.
             % inform these nodes that a shorter path has been found.
@@ -137,21 +157,21 @@ nodeActor(loop,{Label,LookupTable,Successors,Pred,D,Num}) ->
                 false -> nil
             end,
             
-            nodeActor(loop,{Label,LookupTable,Successors,NewPred,NewD,NewNum});
+            nodeActor(State,{MasterNode,Label,Lookup,Successors,NewPred,NewD,NewNum});
         
         % Handle length message if S >= D.
         % Received message does not lead to a shorter path, so
         % discard it and just send an ack.
         %
-        {lengthMessage,P,S,Initiator} when S>= D, self()/=Initiator ->
-            P ! {ack,self(),Initiator};
+        {lengthMessage,P,S,Initiator} when S>= D, self()/=Initiator,State==run ->
+            P ! {ack,self(),Initiator},
+            nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}); % <----- fix
         
         % Handle ack message.
         %
-        {ack,P,Initiator} when Initiator/=self() ->
+        {ack,P,Initiator} when Initiator/=self(),State==run ->
             % print statements for debugging
-            io:format("~p, received ack from ~p, ~p\n",
-            [Label,P,dict:fetch(P,LookupTable)]),
+            io:format("~p, received ack from ~p, ~p\n",[Label,P,Lookup(P)]),
             
             % decrement Num
             NewNum = Num - 1,
@@ -160,7 +180,7 @@ nodeActor(loop,{Label,LookupTable,Successors,Pred,D,Num}) ->
                 false -> do_nothing
             end,
 
-            nodeActor(loop,{Label,LookupTable,Successors,Pred,D,NewNum});
+            nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,NewNum});
         
         
         %---------------------------------------------------------------
@@ -171,19 +191,19 @@ nodeActor(loop,{Label,LookupTable,Successors,Pred,D,Num}) ->
         % This nodes is set as initiator and computes all
         % shortest paths to all other nodes.
         %
-        {initiator} ->
+        {initiator,MasterNode} ->
             % print statements for debugging
             io:format("~p initiates computing, phase 1...\n",[Label]),
             
             % print statements for debugging
             [ io:format("send length message from ~p to ~p, ~p, s: ~p, w: ~p, s+w: ~p\n",
-            [Label,V,dict:fetch(V,LookupTable),0,W,0+W]) || [V,W] <- Successors ],
+            [Label,V,Lookup(V),0,W,0+W]) || [V,W] <- Successors ],
             
             % send length message to all successor nodes
             % and set this node as initiator
             Initiator = self(),
             [ NodeId ! {lengthMessage,self(),W,Initiator} || [NodeId,W] <- Successors],
-            nodeActor(loop,{Label,LookupTable,Successors,nil,0,length(Successors)});
+            nodeActor(State,{MasterNode,Label,Lookup,Successors,nil,0,length(Successors)});
        
                
         %---------------------------------------------------------------
@@ -191,32 +211,51 @@ nodeActor(loop,{Label,LookupTable,Successors,Pred,D,Num}) ->
         %---------------------------------------------------------------
         
         % Handle length message.
-        % Send for each received length messages an ack message.
+        % Send for each received length messages an ack message if S>=0.
         %
-        {lengthMessage,P,_,Initiator} when self()==Initiator ->
-            P ! {ack,self(),Initiator};    
+        {lengthMessage,P,S,Initiator} when S>=0, self()==Initiator,State==run ->
+            P ! {ack,self(),Initiator}, % return ack to P
+        nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num});
         
         % Handle ack message.
         % Decrement Num counter for each received ack message.
+        % If Num==0 start phase 2.
         %
         {ack,P,Initiator} when Initiator==self() ->
             io:format("~p, received ack from ~p, ~p\n",
-            [Label,P,dict:fetch(P,LookupTable)]),
+            [Label,P,Lookup(P)]),
             
             NewNum = Num - 1,
-            case NewNum==0 of
-                true -> io:format("start phase 2\n");
-                false -> nothing
+            % hack alert
+            [NState|_] = case NewNum==0 of
+                true -> [terminate,
+                            io:format("start phase 2, send stop to succs.\n"),
+                            % Phase 2, 
+                            % send over? message to all successor nodes.
+                            [ NodeId ! {stop} || [NodeId,_] <- Successors ]
+                        ];
+                false -> [run]
             end,
-            
-            nodeActor(loop,{Label,LookupTable,Successors,Pred,D,NewNum})
-            
-    end,
-    nodeActor(loop,{Label,LookupTable,Successors,Pred,D,Num}).
+            nodeActor(NState,{MasterNode,Label,Lookup,Successors,Pred,D,NewNum});
+           
+
+            %-----------------------------------------------------------
+            % Phase 2 for intermediate node, p_j, j>1,
+            %-----------------------------------------------------------
+            {stop} when D/=negInfinity ->
+                io:format("received stop..\n",[]),
+                [NodeId ! {stop} || [NodeId,_] <- Successors],
+                PredNodeLabel = case Pred==nil of
+                    true -> nil;
+                    false -> Lookup(Pred)
+                end,
+                nodeActor(terminate,{MasterNode,{Label,D,PredNodeLabel},Lookup,Successors,Pred,negInfinity,Num})
+          
+    end.
 
 
 nodeActor() -> 
-    nodeActor(loop,{nil,dict:new(),[],nil,infinity,0}).
+    nodeActor(run,{nil,nil,dict:new(),[],nil,infinity,0}).
 
 
 %
