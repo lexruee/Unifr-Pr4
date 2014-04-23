@@ -22,14 +22,12 @@ class Graph
 
     def dijkstra(source)
         dist,previous,neighbors = Hash.new,Hash.new,Hash.new
-        
         # for each node
         @nodes.map do |v|
             dist[v] = Float::INFINITY
             previous[v] = nil
             neighbors[v] = Array.new
         end
-        
         # for each edge
         @edges.map do |e|
             v1,v2,w = e
@@ -41,13 +39,10 @@ class Graph
         dijkstra_loop(:previous => previous, :dist => dist, :nodes => @nodes,:neighbors => neighbors)
     end
     
-    
     def dijkstra_loop(aHash)
         previous,dist,nodes,neighbors = aHash[:previous],aHash[:dist],aHash[:nodes],aHash[:neighbors]
-        
         # select a vertex u with min distance value
         u = nodes.reduce {|w,v| w = if dist[v] < dist[w] then v else w end }
-        
         # remove u from nodes list
         nodes = nodes.select {|v| v!=u }
         
@@ -84,8 +79,6 @@ class Graph
         u = previous[u]
         shortest_path_loop(u,previous,path)
     end
-    
-    
 end
 
 File.open('graph.txt','r') do |file|
