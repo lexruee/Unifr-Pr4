@@ -2,11 +2,11 @@
 
 #
 # Rules for implementing the disktra function:
-# No loops are allowed such as while, for and each
+# No loops are allowed such as while, for and each.
 # Only functional functions are allowed such as select, reduce, 
 # inject or map.
 #
-# Reason: we want implement the same solution using erlang.
+# Reason: We want to pot this solution to erlang.
 #
 
 require 'json'
