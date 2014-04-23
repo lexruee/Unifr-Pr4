@@ -1,7 +1,7 @@
 #! /usr/bin/ruby -w
 
 #
-# Rules for implementing the disktra function:
+# Rules for implementing the dijsktra function:
 # No loops are allowed such as while, for and each.
 # Only functional functions are allowed such as select, reduce, 
 # inject or map.
@@ -65,8 +65,8 @@ class Graph
         aHash
     end
     
-    def shortest_path(target)
-        aHash = dijkstra("v1")
+    def shortest_path(source,target)
+        aHash = dijkstra(source)
         previous = aHash[:previous]
         path = Array.new
         path << target
@@ -85,5 +85,5 @@ File.open('graph.txt','r') do |file|
     contents = file.read
     ahash = JSON.parse(contents)
     graph = Graph.new(ahash["V"],ahash["E"])
-    pp graph.shortest_path("v5")
+    pp graph.shortest_path("v1","v5")
 end
