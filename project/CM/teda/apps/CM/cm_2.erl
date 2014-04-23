@@ -64,7 +64,7 @@ masterActor(Nodes,Graph) ->
             
     % after 4 seconds start phase 1 and set RootNode as initiator
     [RootNode|_] = Pids,
-    erlang:send_after(4000,self(),{init,RootNode}),
+    erlang:send_after(7000,self(),{init,RootNode}),
     collect(Pids,[],NodeLabels).
     
 %

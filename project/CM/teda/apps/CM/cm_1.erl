@@ -324,7 +324,16 @@ createInverseLookupTable(Pids,Map) ->
 % @spec createLookupTable(Graph:list(),Dict::dict()) -> list()
 translateGraph(Graph,Dict) ->
     % translate old Graph with lookup table
-    GraphN = lists:map(fun([Label,Vs]) -> [ dict:fetch(Label,Dict), lists:map(fun([K,W]) -> [dict:fetch(K,Dict),W] end,Vs) ] end, Graph),
+    GraphN = lists:map(
+        fun([Label,Vs]) -> [ dict:fetch(Label,Dict), 
+                            lists:map(
+                                fun([K,W]) -> 
+                                    [dict:fetch(K,Dict),W] 
+                                   end,
+                             Vs) 
+                           ] 
+        end, 
+                    Graph),
     io:format("GN: ~p\n",[GraphN]),
     GraphN.
 
