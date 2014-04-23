@@ -6,7 +6,7 @@
 # Only functional functions are allowed such as select, reduce, 
 # inject or map.
 #
-# Reason: We want to pot this solution to erlang.
+# Reason: We want to port this solution to erlang.
 #
 
 require 'json'
