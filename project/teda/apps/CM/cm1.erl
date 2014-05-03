@@ -65,9 +65,10 @@ masterActor(Ns,Graph) ->
     % set master node for all nodes.
     [ NodeId ! {masterNode,self()} || NodeId <- Pids ],
             
-    % after 4 seconds start phase 1 and set RootNode as initiator
+    % after 3 seconds start phase 1 and set RootNode as initiator
     [RootNode|_] = Pids,
-    erlang:send_after(4000,self(),{init,RootNode}),
+    erlang:send_after(3000,self(),{init,RootNode}),
+    io:format("waiting three seconds for deployment...\n"),
     collect(Pids,[],Vs).
     
 %
