@@ -10,16 +10,18 @@
 #
 # History: 28.03.2014, Christian Göttel, modifications based on student request
 #          31.03.2014, Christian Göttel, detect correctly the SSH agent
+#          29.04.2014, Christian Göttel, fixed non-POSIX redirection thanks to
+#                                        Jocelyn Thode and Simon Brulhart
 #
 # Author: Christian Göttel 18.03.2014
 #
-# Version: 1.1
+# Version: 1.2
 
 LC_ALL=C
 export LC_ALL
 
 ID_FILE=~/.ssh/unifr_pr4
-MACHINES_FILE=./unifr_machines.txt
+MACHINES_FILE=../conf/unifr_machines.txt
 USERNAME=$USER
 
 # Do NOT change the value of the following variable
@@ -83,7 +85,7 @@ done
 
 # Setup SSH agent
 if [ -S $SSH_AUTH_SOCK ]; then
-  ssh-add $ID_FILE &> /dev/null
+  ssh-add $ID_FILE >& /dev/null
 else
   SSH_ARGS="-2 -i $ID_FILE"
 fi
@@ -98,5 +100,5 @@ sed -e 's/${KEY}//g' ~/.ssh/authorized_keys > ~/.ssh/ak; mv ~/.ssh/ak \
 ~/.ssh/authorized_keys; fi"
 done < $MACHINES_FILE
 
-ssh-add -d $ID_FILE &> /dev/null
+ssh-add -d $ID_FILE >& /dev/null
 rm -f ${ID_FILE}*

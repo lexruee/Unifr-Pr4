@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Creates Erlang nodes on the local machine in the current working directory.
 # Writes the identifiers of the created nodes in the file enodes.txt.
@@ -6,10 +6,14 @@
 # Weibel 17.05.2013
 #
 # History: 29.03.2014, Christian Göttel, improved argument parsing
+#          22.04.2014, Christian Göttel, fixed non-POSIX compatible loop thanks
+#                                        to Alexander Rüedlinger
+#          29.04.2014, Christian Göttel, fixed non-POSIX redirection thanks to
+#                                        Jocelyn Thode and Simon Brulhart
 #
 # Author: Christian Göttel, 15.03.2014
 #
-# Version: 1.1-TEDA
+# Version: 1.2-TEDA
 
 LC_ALL=C
 export LC_ALL
@@ -78,15 +82,17 @@ NODE="master"
 NODE_ID=${NODE}@${HOST}
 echo \'${NODE_ID}\'. > $ENODES_FILE
 
-for ((NODE=0; NODE<$NB_NODES; NODE++));
+NODE=0
+while [ $NODE -lt $NB_NODES ];
 do
   NODE_ID=${NODE}@${HOST}
   echo "Creating $NODE_ID with cookie '${COOKIE}'"
   erl -sname $NODE -setcookie $COOKIE -detached
   echo \'${NODE_ID}\'. >> $ENODES_FILE
+  NODE=$(($NODE+1))
 done
 
-erl -noshell -eval 'make:all(),init:stop().' &> /dev/null
+erl -noshell -eval 'make:all(),init:stop().' >& /dev/null
 NODE="master"
 NODE_ID=${NODE}@${HOST}
 echo "Creating $NODE_ID with cookie '${COOKIE}'"

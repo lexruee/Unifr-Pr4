@@ -10,17 +10,19 @@
 #
 # History: 18.03.2014, Christian Göttel, made POSIX compatible and improved
 #          28.03.2014, Christian Göttel, modifications based on student request
+#          29.04.2014, Christian Göttel, fixed non-POSIX redirection thanks to
+#                                        Jocelyn Thode and Simon Brulhart
 #
 # Author: Christian Göttel, 15.03.2014
 #
-# Version: 2.1
+# Version: 2.2
 
 LC_ALL=C
 export LC_ALL
 
 GENERATE_KEY=0
 ID_FILE=~/.ssh/unifr_pr4
-MACHINES_FILE=./unifr_machines.txt
+MACHINES_FILE=../conf/unifr_machines.txt
 PASSPHRASE=
 USERNAME=$USER
 
@@ -104,7 +106,7 @@ fi
 # Distribute the public RSA key to the remote hosts
 while read HOST ; do
   echo -n "${USERNAME}@${HOST} "
-  ssh-copy-id -i $ID_FILE ${USERNAME}@${HOST} &> /dev/null
+  ssh-copy-id -i $ID_FILE ${USERNAME}@${HOST} >& /dev/null
   if [ ! $? -eq 0 ]; then
     echo "Remote setup for host $HOST failed."
   fi

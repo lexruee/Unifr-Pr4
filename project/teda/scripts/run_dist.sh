@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # - Starts an Erlang node on each of a desired number of remote hosts
 # - Copies and compiles an Erlang source file on each host
@@ -14,10 +14,14 @@
 #          31.03.2014, Christian Göttel, detect correctly the SSH agent
 #          09.04.2014, Christian Göttel, detect whether DNS or mDNS is used
 #          11.04.2014, Christian Göttel, use new machine file format
+#          23.04.2014, Christian Göttel, fixed non-POSIX compatible loop thanks
+#                                        to Alexander Rüedlinger
+#          29.04.2014, Christian Göttel, fixed non-POSIX redirection thanks to
+#                                        Jocelyn Thode and Simon Brulhart
 #
 # Author: Christian Göttel, 15.03.2014
 #
-# Version: 2.2-TEDA
+# Version: 2.3-TEDA
 
 LC_ALL=C
 export LC_ALL
@@ -28,7 +32,6 @@ ENODES_FILE=./enodes.txt
 FCT=
 ID_FILE=~/.ssh/unifr_pr4
 NB_MACHINES=1
-#USERNAME="pi"
 
 # Do NOT change the value of the following variable
 APP=${PWD##*/}
@@ -154,7 +157,7 @@ echo "We got $I machines for you. Yay!"
 
 # Setup SSH agent
 if [ -S $SSH_AUTH_SOCK ]; then
-  ssh-add $ID_FILE &> /dev/null
+  ssh-add $ID_FILE >& /dev/null
 else
   SSH_ARGS="-2 -i $ID_FILE"
 fi
@@ -177,27 +180,21 @@ for I in $HOSTS ; do
   USERNAME=$(echo $I | cut -d : -f 4)
   echo
   echo $HOST
-  #echo "blaa"
-  #USERNAME="pi"
-  echo $USERNAME
-
   echo " - Uploading ${APP}.zip..."
   cd ../..
   zip -r ${APP}.zip ./${APP_DIR#$TEDA_DIR}/* ./${LIB_DIR#$TEDA_DIR}/* -x \
-\*.beam \*.dump \*enodes.txt &> /dev/null
+\*.beam \*.dump \*enodes.txt >& /dev/null
   scp -q $SSH_ARGS ${APP}.zip ${USERNAME}@${HOST}:~
   rm -f ${APP}.zip
   cd ${APP_DIR}
   echo " - Unpacking ${APP}.zip..."
-  ssh $SSH_ARGS ${USERNAME}@${HOST} "mkdir ~/teda &> /dev/null && unzip \
-~/${APP}.zip -d ~/teda &> /dev/null && rm -f ~/${APP}.zip"
+  ssh $SSH_ARGS ${USERNAME}@${HOST} "mkdir ~/teda >& /dev/null && unzip \
+~/${APP}.zip -d ~/teda >& /dev/null && rm -f ~/${APP}.zip"
   echo " - Compiling ${APP}...	"
   ssh $SSH_ARGS ${USERNAME}@${HOST} "cd ~/teda/${APP_DIR#$TEDA_DIR} && erl \
--noshell -eval 'make:all(),init:stop().' &> /dev/null"
-  
-  IIII=0
-  while [[ $IIII -lt $NB_NODES ]]
-  do
+-noshell -eval 'make:all(),init:stop().' >& /dev/null"
+  I=0
+  while [ $I -lt $NB_NODES ]; do
     NODE=$RANDOM
     NODE_ID=${NODE}@${HOST}
     echo " - Starting Erlang node(s) ${NODE_ID}..."
@@ -207,12 +204,12 @@ for I in $HOSTS ; do
     fi
     ssh $SSH_ARGS ${USERNAME}@${HOST} "cd ~/teda/${APP_DIR#$TEDA_DIR} && erl \
 +P $NB_PROCS -name $NODE_ID -setcookie $COOKIE -detached"
-  IIII=$(($IIII+1))
+    I=$(($I+1))
   done
   echo \'${NODE_ID}\'. >> $ENODES_FILE
 done
 
-erl -noshell -eval 'make:all(),init:stop().' &> /dev/null
+erl -noshell -eval 'make:all(),init:stop().' >& /dev/null
 HOST=$(uname -n)
 NODE="master"
 NODE_ID=${NODE}@${HOST}
@@ -241,7 +238,7 @@ fi
 
 for I in $HOSTS ; do
   HOST=$(echo $I | cut -d : -f 1)
-  #USERNAME=$(echo $I | cut -d : -f 4)
+  USERNAME=$(echo $I | cut -d : -f 4)
   echo -n "  ${HOST}... "
   ssh $SSH_ARGS ${USERNAME}@${HOST} "$CMD"
 done
