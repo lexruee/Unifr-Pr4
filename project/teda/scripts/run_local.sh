@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Creates Erlang nodes on the local machine in the current working directory.
 # Writes the identifiers of the created nodes in the file enodes.txt.
