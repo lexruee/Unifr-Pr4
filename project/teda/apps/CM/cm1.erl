@@ -15,76 +15,86 @@
 
 %
 % start():
-% Starts the simplified CM algorithm.
-% The start function takes as an argument the name of a "graph" file
-% without the .txt extension. E.g.: file = graph.txt, start("graph") 
+% Starts the simplified CM algorithm on the master node.
+% The start function takes as an argument the name of a "graph" file.
+% E.g.: file = graph.txt, start("graph.txt") 
 %
 % @spec start(File::list()) -> any()
 start(File) ->
-    % read graph topology from file
-    io:format("~p\n",[File]),
     Filename = list_to_atom(File), % never ever use something else!
     io:format("read file ~p\n",[Filename]),
-    {ok,Graph} = file:consult(Filename),
-    %% read nodes list
-    {ok,[_|Ns]} = file:consult('enodes.txt'),
-    %% checks if node is master or not
-    masterActor(Ns,Graph).
+    {ok,Graph} = file:consult(Filename), % read file: list of adjacency lists
+    {ok,[_|Ns]} = file:consult('enodes.txt'), % read all host names from file enodes.
+    
+    % go into state deployment and deploy the graph on the cluster
+    deployment(Ns,Graph).
     
     
 %
-% masterActor():
-% Master actor.
+% deployment():
+% The deployment function uses two arguments Ns and Graph.
+% The list Ns contains all host names and Graph describes the topology 
+% in terms of a list of adjacency lists. 
 %
-% @spec masterActor(Nodes::list(),Graph::list()) -> any()
-masterActor(Ns,Graph) ->
-    % map vertices on nodes
-    Map = teda:aggregate(Ns,Graph),
-    Vs = [ V || {_,[V|_]} <- Map ],
+% For clarification:
+% - Ns contains a list of hostnames.
+% - N is a hostname
+% - Vs contains a list of vertex labels v0,v1, etc.
+% - V is a vertex label.
+% - Pids is a list of process ids.
+% - Pid is a process id.
+% - Each node process corresponds to a vertex. (Vs <--> Pids)
+%
+% @spec deployment(Ns::list(),Graph::list()) -> any()
+deployment(Ns,Graph) ->
+    Map = teda:aggregate(Ns,Graph), % map vertices on hosts / nodes
+    Vs = [ V || {_,[V|_]} <- Map ], % extract all vertex labels 
     io:format("map ~p\n",[Map]),
     
-    % deploy node processes
-    Pids = [ spawn(N,?MODULE,nodeActor,[]) || {N,_} <- Map ],
+    Pids = [ spawn(N,?MODULE,nodeActor,[]) || {N,_} <- Map ], % deploy node processes
+    
     % create look up table for node label v_i -> pid translation
     LookupTable = createLookupTable(Pids,Map),
     
-    % translate original graph into a graph with pids
-    GraphN = translateGraph(Graph,LookupTable),
+    % translate original graph with vertex labels (N) into a graph with pids.
+    GraphWithPids = translateGraph(Graph,LookupTable),
     
-    % let each node know his successors
-    [ NodeId ! {successors,Successors} || [NodeId,Successors] <- GraphN ],
+    % let each node process know his successor node processes
+    [ Pid ! {successors,Successors} || [Pid,Successors] <- GraphWithPids ],
     
     % give each node process a node label v0,v1,v2 etc.
-    [ NodeId ! {label,V} || {NodeId,V} <- lists:zip(Pids,Vs) ],
+    [ Pid ! {label,V} || {Pid,V} <- lists:zip(Pids,Vs) ],
     
-    % distribute inverse lookup table for pids -> v_i translation
+    % distribute inverse lookup table for pids -> v_i translation (for debugging purposes)
     InverseLookupTable = createInverseLookupTable(Pids,Map),
-    io:format("distribute table: ~p\n",[dict:to_list(InverseLookupTable)]),
-    [ NodeId ! {lookupTable,dict:to_list(InverseLookupTable)} || NodeId <- Pids ],
+    
+    %io:format("distribute table: ~p\n",[dict:to_list(InverseLookupTable)]),
+    [ Pid ! {lookupTable,dict:to_list(InverseLookupTable)} || Pid <- Pids ],
    
-    % set master node for all nodes.
-    [ NodeId ! {masterNode,self()} || NodeId <- Pids ],
+    % set master node processes for all nodes.
+    [ Pid ! {masterNode,self()} || Pid <- Pids ],
             
     % after 3 seconds start phase 1 and set RootNode as initiator
-    [RootNode|_] = Pids,
-    erlang:send_after(3000,self(),{init,RootNode}),
+    [InitiatorPid|_] = Pids, % choose the first node process as initiator node process.
+    erlang:send_after(3000,self(),{init,InitiatorPid}),
     io:format("waiting three seconds for deployment...\n"),
-    collect(Pids,[],Vs).
+    
+    collect(Pids,[],Vs). % go into state collect
     
 %
 % collect():
-% Collect function for master actor.
-% Receives an init message and setups the initiator node 
+% Collect function for master node process.
+% Receives an init message and setups the initiator node process
 % for starting the CM algorithm.
 %
-% After the computation is finished it collects the results of all nodes.
+% After the computation is finished it collects the results from all node processes.
 %
-% @spec collect(Pids::list(),Result:list(),NodeLabels::list()) -> any()    
-collect(Pids,Result,NodeLabels) ->
+% @spec collect(Pids::list(),Result:list(),Vs::list()) -> any()    
+collect(Pids,Result,Vs) ->
     case length(Pids)==0 of
         true -> Edges = [ [V,W,U] || [V,W,U] <- Result,U/=nil],
-                io:format("\nfinshihed, results:\nnodes: ~p\nedges: ~p\n\n",[NodeLabels,Edges]),
-                collect([nil],Result,NodeLabels);
+                io:format("\nfinshihed, results:\nnodes: ~p\nedges: ~p\n\n",[Vs,Edges]),
+                collect([nil],Result,Vs);
         false -> do_nothing
     end,
         
@@ -96,16 +106,16 @@ collect(Pids,Result,NodeLabels) ->
         % is over.
         %
         {finished} ->
-            % collect current state for all nodes.
-            [ NodeId ! {collect} || NodeId <- Pids ],
-            collect(Pids,Result,NodeLabels);
+            % collect current state for all nodes processes.
+            [ Pid ! {collect} || Pid <- Pids ],
+            collect(Pids,Result,Vs);
     
         %
         % Initiates phase 1 of the CM algorithm
-        % and sets Root as iniator node.
-        {init,Root} ->
-            Root ! {initiator,self()},
-            collect(Pids,Result,NodeLabels);
+        % and sets one of the node processes as the iniator node process.
+        {init,InitiatorPid} ->
+            InitiatorPid ! {initiator,self()},
+            collect(Pids,Result,Vs);
         
         % Handle collect messages.
         % Receive collect messages and collect the results.
@@ -113,19 +123,38 @@ collect(Pids,Result,NodeLabels) ->
         {collect,State,NodePid} ->
             % Remove corresponding Pid for each received collect message.
             NPids = lists:filter(fun(Pid) -> Pid/=NodePid end,Pids),
-            collect(NPids,lists:sort(Result ++ [State]),NodeLabels)
+            collect(NPids,lists:sort(Result ++ [State]),Vs)
     end.
-    
+     
 %
 % nodeActor():
-% Node actor.
+% The function nodeActor() acts as an init function for initialization 
+% of the node actor process.
 %
 % @spec nodeActor() -> any()
 nodeActor() -> 
     nodeActor(run,{nil,nil,dict:new(),[],nil,infinity,0}).
 
 %
-% @spec masterActor(State::atom(),Variables::tuple()) -> any()
+% nodeActor():
+% This function is basically the main algorithm of a node process.
+% It handles all length messages, ack and stop messages.
+% It implements phase 1 (computing shortest path) 
+% and phase 2 (collect results) without terminating. 
+%
+% For clarification:
+% - StateVariables:
+%       - MasterNode::pid()      Master node process pid.
+%       - Label::atom()          Corresponding Vertex label of the node process.
+%       - Lookup::fun()          A lookup function for translating pids to vertex labels.
+%       - Successors::list()     A list of successor node process ids.
+%       - Pred::pid()            Id of the predecessor node process.
+%       - D::int()               The current weight of the node process / vertex.
+%       - Num::int()             The number of expected acks.
+%
+% - State can be either run or terminate.
+%
+% @spec nodeActor(State::atom(),StateVariables::tuple()) -> any()
 nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
     % print statements for debugging
     case Pred  of
@@ -296,34 +325,35 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
 
 %
 % createLookupTable():
-% Creates a lookup table for translating a node label 
-% into a node process pid
+% Creates a lookup table for translating a vertex label (V) 
+% to a node process id (Pid). It returns a dictionary.
 %
 % @spec createLookupTable(Pids:list(),Map::dict()) -> dict()
 createLookupTable(Pids,Map) ->
-    % associate pids with graph vertices
-    Tmp = [ {K,L} || {K,{_,L}} <- lists:zip(Pids,Map)],
+    % associate pids with vertex labels.
+    Tmp = [ {Pid,Vs} || {Pid,{_,Vs}} <- lists:zip(Pids,Map)],
     % make a lookup table for pids and vertices.    
-    KeyVal = [{Key,Val} || {Val,[Key|_]} <- Tmp],
-    dict:from_list(KeyVal).
+    KeyVal = [{V,Pid} || {Pid,[V|_]} <- Tmp],
+    dict:from_list(KeyVal). % return a dictionary
 
 %
 % createInverseLookupTable():
-% Creates a lookup table for translating  a process pid into
-% a node label.
+% Creates a lookup table for translating a process id  (Pid) 
+% to a vertex label (V). It returns a dictionary.
 %
 % @spec createInverseLookupTable(Pids:list(),Map::dict()) -> dict()
 createInverseLookupTable(Pids,Map) ->
     % associate pids with graph vertices
-    Tmp = [{K,L} || {K,{_,L}} <- lists:zip(Pids,Map)],
+    Tmp = [{Pid,Vs} || {Pid,{_,Vs}} <- lists:zip(Pids,Map)],
     % make a lookup table for pids and vertices.    
-    ValKey = [ {Val,Key} || {Val,[Key|_]} <- Tmp],
-    dict:from_list(ValKey).
+    ValKey = [ {Pid,V} || {Pid,[V|_]} <- Tmp],
+    dict:from_list(ValKey). % return a dictionary
 
 %
 % translateGraph():
-% Translates all node labels in a graph (represented as an adjacency list)
+% Translates all vertec labels in a graph (represented as an adjacency list)
 % by using the provided "translation" dictionary / lookup table. 
+% It returns the translated graph.
 %
 % @spec createLookupTable(Graph:list(),Dict::dict()) -> list()
 translateGraph(Graph,Dict) ->
