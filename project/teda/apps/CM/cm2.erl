@@ -48,7 +48,7 @@ start(File) ->
 % @spec deployment(Ns::list(),Graph::list()) -> any()
 deployment(Ns,Graph) ->
     % map vertices on nodes
-    Mapped = teda:aggregate(Ns,Graph),
+    Mapped = aggregate(Ns,Graph),
     Vs = [ V || {_,[V|_]} <- Mapped ],
     io:format("map ~p\n",[Mapped]),
     
@@ -100,7 +100,8 @@ collect(Pids,Edges,Vs) ->
         % Initiates phase 1 of the CM algorithm
         % and sets Root as iniator node.
         {init,InitiatorPid} ->
-            InitiatorPid ! {initiator,self()},
+            io:format("set initiator node ~p..\n",[InitiatorPid]),
+            InitiatorPid ! {initiator},
             collect(Pids,Edges,Vs);
         
         %
@@ -265,7 +266,7 @@ nodeActor(State,{MasterPid,V,Lookup,Successors,Pred,D,Num}) ->
         % This nodes is set as initiator and computes all
         % shortest paths to all other nodes.
         %
-        {initiator,MasterPid} ->
+        {initiator} ->
             % print statements for debugging
             io:format("~p initiates computing, phase 1...\n",[V]),
             
@@ -378,3 +379,27 @@ translateGraph(Graph,Dict) ->
     io:format("GN: ~p\n",[GraphN]),
     GraphN.
 
+% aggregate():
+% @spec aggregate(Ns::list(),Vs::list()) -> Fs::list()
+%
+%   This function assigns vertices to nodes. If there are more vertices than
+%   nodes, this function will take the modulo of the list of nodes and continue
+%   assigning vertices. The aggregated list returned by this function is of the
+%   following structure:
+%      [{N0,V0}, {N1,V1}, ..., {Nk-1,Vk-1}, {N0,Vk}, ...], with k=length(Ns)
+%
+% aggregate {N(i rem k), Vi}, for i in 0..length(Vs)-1
+aggregate(Ns,Vs) ->
+  aggregate_modulo(Ns,Vs,[],Ns).
+
+% aggregate_modulo():
+% @spec agregate_modulo(Ns::list(),Vs::list(),Fs::list(),Ns_init::list()) -> 
+%         Fs::list()
+%
+%   Helper function for the aggregate() function.
+aggregate_modulo(_Ns,[],Fs,_Ns_init) ->
+  lists:reverse(Fs);                          % return value Fs
+aggregate_modulo([],Vs,Fs,Ns_init) ->
+  aggregate_modulo(Ns_init,Vs,Fs,Ns_init);    % continue building Fs
+aggregate_modulo([N|Ns],[V|Vs],Fs,Ns_init) ->
+  aggregate_modulo(Ns,Vs,[{N,V}|Fs],Ns_init). % build Fs

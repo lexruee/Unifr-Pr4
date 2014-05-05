@@ -7,7 +7,7 @@
 %
 % @spec start(File::list()) -> any()
     {ok,Graph} = file:consult(list_to_atom(File)),
-    {ok,[_|Ns]} = teda:nodes(), 
+    {ok,[_|Ns]} = nodes(), 
     deployment(Ns,Graph).
 
 %
@@ -27,7 +27,7 @@
 %
 % @spec deployment(Ns::list(),Graph::list()) -> any()
 deployment(Ns,Graph) ->
-    Mapped = teda:aggregate(Ns,Graph), % map vertices on hosts / nodes
+    Mapped = aggregate(Ns,Graph), % map vertices on hosts / nodes
     Vs = getLabels(Mapped)
     Pids = spawnProcesses(Mapped),
     LookupTable = createLookupTable(Pids,Mapped),

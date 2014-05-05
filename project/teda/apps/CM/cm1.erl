@@ -1,6 +1,7 @@
 -module(cm1).
 -export([start/1,nodeActor/0]). 
 
+
 %
 % Simplified CM version for non-negative graphs without termination.
 % Solution for series 8-10.
@@ -47,7 +48,7 @@ start(File) ->
 %
 % @spec deployment(Ns::list(),Graph::list()) -> any()
 deployment(Ns,Graph) ->
-    Map = teda:aggregate(Ns,Graph), % map vertices on hosts / nodes
+    Map = aggregate(Ns,Graph), % map vertices on hosts / nodes
     Vs = [ V || {_,[V|_]} <- Map ], % extract all vertex labels 
     io:format("map ~p\n",[Map]),
     
@@ -114,7 +115,7 @@ collect(Pids,Edges,Vs) ->
         % Initiates phase 1 of the CM algorithm
         % and sets one of the node processes as the iniator node process.
         {init,InitiatorPid} ->
-            InitiatorPid ! {initiator,self()},
+            InitiatorPid ! {initiator},
             collect(Pids,Edges,Vs);
         
         % Handle collect messages.
@@ -275,7 +276,7 @@ nodeActor(MasterPid,V,Lookup,Successors,Pred,D,Num) ->
         % This nodes is set as initiator and computes all
         % shortest paths to all other nodes.
         %
-        {initiator,MasterPid} ->
+        {initiator} ->
             % print statements for debugging
             io:format("~p initiates computing, phase 1...\n",[V]),
             
@@ -354,7 +355,7 @@ createInverseLookupTable(Pids,Mapped) ->
 
 %
 % translateGraph():
-% Translates all vertec labels in a graph (represented as an adjacency list)
+% Translates all vertex labels in a graph (represented as an adjacency list)
 % by using the provided "translation" dictionary / lookup table. 
 % It returns the translated graph.
 %
@@ -369,3 +370,27 @@ translateGraph(Graph,Dict) ->
     GraphN.
 
 
+% aggregate():
+% @spec aggregate(Ns::list(),Vs::list()) -> Fs::list()
+%
+%   This function assigns vertices to nodes. If there are more vertices than
+%   nodes, this function will take the modulo of the list of nodes and continue
+%   assigning vertices. The aggregated list returned by this function is of the
+%   following structure:
+%      [{N0,V0}, {N1,V1}, ..., {Nk-1,Vk-1}, {N0,Vk}, ...], with k=length(Ns)
+%
+% aggregate {N(i rem k), Vi}, for i in 0..length(Vs)-1
+aggregate(Ns,Vs) ->
+  aggregate_modulo(Ns,Vs,[],Ns).
+
+% aggregate_modulo():
+% @spec agregate_modulo(Ns::list(),Vs::list(),Fs::list(),Ns_init::list()) -> 
+%         Fs::list()
+%
+%   Helper function for the aggregate() function.
+aggregate_modulo(_Ns,[],Fs,_Ns_init) ->
+  lists:reverse(Fs);                          % return value Fs
+aggregate_modulo([],Vs,Fs,Ns_init) ->
+  aggregate_modulo(Ns_init,Vs,Fs,Ns_init);    % continue building Fs
+aggregate_modulo([N|Ns],[V|Vs],Fs,Ns_init) ->
+  aggregate_modulo(Ns,Vs,[{N,V}|Fs],Ns_init). % build Fs

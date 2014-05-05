@@ -7,7 +7,7 @@
 %
 % @spec start(File::list()) -> any()
     {ok,Graph} = file:consult(list_to_atom(File)),
-    {ok,[_|Ns]} = teda:nodes(), 
+    {ok,[_|Ns]} = nodes(), 
     deployment(Ns,Graph).
 
 %
