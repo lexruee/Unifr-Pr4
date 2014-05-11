@@ -2,7 +2,7 @@
 -export([start/1,nodeActor/0]). 
 
 %
-% Simplified CM version for non-negative graphs with termination.
+% Simplified CM version for negative graphs with termination.
 % Solution for series 8-10.
 %
 % author:   Alexander Rüedlinger, Michael Jungo
