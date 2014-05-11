@@ -16,7 +16,7 @@ This runs the cm2 erlang program with file graph.txt and with 5 nodes
 
 ###Alternative way
 ```
-bash ../../scripts/run_local.sh -f 'cm1:start("graph.txt") '-n 2
+bash ../../scripts/run_local.sh -f 'cm1:start("./graphs/graph.txt") '-n 2
 ```
 This runs the cm1 erlang program with file graph.txt and with 2 nodes.  
 
