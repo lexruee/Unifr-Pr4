@@ -201,7 +201,7 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
         %
         {lengthMessage,P,S,Initiator} when S<D,Initiator/=self(); D==infinity,Initiator/=self() -> % number < atom 
             % print statements for debugging
-            io:format("~p, received lengh message S < D from ~p, ~p \n",[Label,P,Lookup(P)]),
+            io:format("~p, received length message S < D from ~p, ~p \n",[Label,P,Lookup(P)]),
             
             % send an ack to the old predecessor, before changing it.
             case Num > 0 of
@@ -330,7 +330,7 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
         {lengthMessage,P,S,Initiator} when S<0, self()==Initiator ->
             io:format(">>>>>>>>>>>>>>>>>>>>>> negative cycle detected, ~p!\n",[Lookup(P)]),
             [ NodeId ! {stop} || [NodeId,_] <- Successors ],
-            nodeActor(terminate,{MasterNode,Label,Lookup,Successors,Pred,D,Num})
+            nodeActor(terminate,{MasterNode,[Label,D,Lookup(Pred)]})
     end.
 
 
