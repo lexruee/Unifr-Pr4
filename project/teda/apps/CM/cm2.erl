@@ -362,7 +362,7 @@ createInverseLookupTable(Pids,Map) ->
 
 %
 % translateGraph():
-% Translates all vertec labels in a graph (represented as an adjacency list)
+% Translates all vertex labels in a graph (represented as an adjacency list)
 % by using the provided "translation" dictionary / lookup table. 
 % It returns the translated graph.
 %
