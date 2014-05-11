@@ -12,14 +12,13 @@
 %           a nice and beautiful implementation. The goal was just to
 %           get the job done.
 
-
 %
 % start():
-% Starts the simplified CM algorithm.
-% The start function takes as an argument the name of a "graph" file
-% without the .txt extension. E.g.: file = graph.txt, start("graph") 
+% Starts the simplified CM algorithm on the master node.
+% The start function takes as an argument the name of a "graph" file.
+% E.g.: file = graph.txt, start("graph.txt") 
 %
-% @spec masterActor(Nodes::list(),Graph::list()) -> any()
+% @spec start(File::list()) -> any()
 start(File) ->
     % read graph topology from file
     Filename = list_to_atom(File),
@@ -28,21 +27,33 @@ start(File) ->
     % read nodes list
     {ok,[_|Nodes]} = file:consult('enodes.txt'),
     % checks if node is master or not
-    masterActor(Nodes,Graph).
+    deployment(Nodes,Graph).
+
 
 %
-% masterActor():
-% Master actor.
+% deployment():
+% The deployment function uses two arguments Ns and Graph.
+% The list Ns contains all host names and Graph describes the topology 
+% in terms of a list of adjacency lists. 
 %
-% @spec masterActor(Nodes::list(),Graph::list()) -> any()
-masterActor(Nodes,Graph) ->
+% For clarification:
+% - Ns contains a list of hostnames.
+% - N is a hostname
+% - Vs contains a list of vertex labels v0,v1, etc.
+% - V is a vertex label.
+% - Pids is a list of process ids.
+% - Pid is a process id.
+% - Each node process corresponds to a vertex. (Vs <--> Pids)
+%
+% @spec deployment(Ns::list(),Graph::list()) -> any()
+deployment(Nodes,Graph) ->
     % map vertices on nodes
     Map = teda:aggregate(Nodes,Graph),
-    NodeLabels = [ Label || {_,[Label|_]} <- Map ],
+    Vs = [ V || {_,[V|_]} <- Map ],
     io:format("map ~p\n",[Map]),
     
     % deploy node processes
-    Pids = [ spawn(NodeId,?MODULE,nodeActor,[]) || {NodeId,_} <- Map ],
+    Pids = [ spawn(N,?MODULE,nodeActor,[]) || {N,_} <- Map ],
     % create look up table for node label v_i -> pid translation
     LookupTable = createLookupTable(Pids,Map),
     
@@ -53,36 +64,36 @@ masterActor(Nodes,Graph) ->
     [ NodeId ! {successors,Successors} || [NodeId,Successors] <- GraphN ],
     
     % give each node process a node label v0,v1,v2 etc.
-    [ NodeId ! {label,Label} || {NodeId,Label} <- lists:zip(Pids,NodeLabels) ],
+    [ NodeId ! {label,Label} || {NodeId,Label} <- lists:zip(Pids,Vs) ],
     
     % distribute inverse lookup table for pids -> v_i translation
     InverseLookupTable = createInverseLookupTable(Pids,Map),
     io:format("distribute table: ~p\n",[dict:to_list(InverseLookupTable)]),
-    [ NodeId ! {lookupTable,dict:to_list(InverseLookupTable)} || NodeId <- Pids ],
+    [ Pid ! {lookupTable,dict:to_list(InverseLookupTable)} || Pid <- Pids ],
    
     % set master node for all nodes.
-    [ NodeId ! {masterNode,self()} || NodeId <- Pids ],
+    [ Pid ! {masterNode,self()} || Pid <- Pids ],
             
     % after 3 seconds start phase 1 and set RootNode as initiator
     [RootNode|_] = Pids,
     erlang:send_after(3000,self(),{init,RootNode}),
     io:format("waiting three seconds for deployment...\n"),
-    collect(Pids,[],NodeLabels).
+    collect(Pids,[],Vs).
     
 %
 % collect():
-% Collect fucntion for master actor.
-% Receives an init message and setups the initiator node 
+% Collect function for master node process.
+% Receives an init message and setups the initiator node process
 % for starting the CM algorithm.
 %
-% After the computation is finished it collects the results of all nodes.
+% After the computation is finished it collects the results from all node processes.
 %
-% @spec collect(Pids::list(),Result:list(),NodeLabels::list()) -> any()
-collect([],Result,NodeLabels) ->
+% @spec collect(Pids::list(),Result:list(),Vs::list()) -> any()  
+collect([],Result,Vs) ->
     Edges = [ [V,W,U] || [V,W,U] <- Result,U/=nil],
-    io:format("\nfinshihed, results:\nnodes: ~p\nedges: ~p\n\n",[NodeLabels,Edges]);
+    io:format("\nfinshihed, results:\nnodes: ~p\nedges: ~p\n\n",[Vs,Edges]);
     
-collect(Pids,Result,NodeLabels) ->
+collect(Pids,Result,Vs) ->
     receive
     
         %
@@ -90,26 +101,46 @@ collect(Pids,Result,NodeLabels) ->
         % and sets Root as iniator node.
         {init,Root} ->
             Root ! {initiator,self()},
-            collect(Pids,Result,NodeLabels);
+            collect(Pids,Result,Vs);
         
         %
         % Receive collect messages and collect the results.
         {collect,State,NodePid} ->
             % Remove corresponding Pid for each received collect message.
             NPids = lists:filter(fun(Pid) -> Pid/=NodePid end,Pids),
-            collect(NPids,lists:sort(Result ++ [State]),NodeLabels)
+            collect(NPids,lists:sort(Result ++ [State]),Vs)
     end.
     
 %
 % nodeActor():
-% Node actor.
+% The function nodeActor() acts as an init function for initialization 
+% of the node actor process.
 %
 % @spec nodeActor() -> any()
 nodeActor() -> 
     nodeActor(run,{nil,nil,dict:new(),[],nil,infinity,0}).
 
 %
-% @spec masterActor(State::atom(),Variables::tuple()) -> any()
+% nodeActor():
+% This function is basically the main algorithm of a node process.
+% It handles all length messages, ack and stop messages.
+% It implements phase 1 (computing shortest path) 
+% and phase 2 (collect results) with terminating. 
+%
+% For clarification:
+% - StateVariables:
+%       - MasterNode::pid()      Master node process pid.
+%       - Label::atom()          Corresponding Vertex label of the node process.
+%       - Lookup::fun()          A lookup function for translating pids to vertex labels.
+%       - Successors::list()     A list of successor node process ids.
+%       - Pred::pid()            Id of the predecessor node process.
+%       - D::int()               The current weight of the node process / vertex.
+%       - Num::int()             The number of expected acks.
+%
+% - State can be either run or terminate.
+%
+% @spec nodeActor(State::atom(),{MasterPid::pid(),V::atom(),Lookup::fun(),
+%       Successors::list(),Pred::pid(),D::int(),Num::int()}) -> any())
 nodeActor(terminate,{MasterNode,[V,W,Pred]}) ->
     State = [V,W,Pred],
     io:format("terminate node ~p, with state: ~p\n",[V,State]),
@@ -185,11 +216,11 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
             
             % print statements for debugging
             [ io:format("send length message from ~p to ~p, ~p, s: ~p, w: ~p, s+w: ~p\n",
-            [Label,V,Lookup(V),S,W,S+W]) || [V,W] <- Successors ],
+            [Label,SuccPid,Lookup(SuccPid),S,W,S+W]) || [SuccPid,W] <- Successors ],
             
             % send length messages to all successors of this node.
             % inform these nodes that a shorter path has been found.
-            [ V ! {lengthMessage,self(),NewD+W,Initiator} || [V,W] <- Successors ],
+            [ SuccPid ! {lengthMessage,self(),NewD+W,Initiator} || [SuccPid,W] <- Successors ],
 
             % increment Num
             NewNum = Num + length(Successors),
@@ -238,12 +269,12 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
             
             % print statements for debugging
             [ io:format("send length message from ~p to ~p, ~p, s: ~p, w: ~p, s+w: ~p\n",
-            [Label,V,Lookup(V),0,W,0+W]) || [V,W] <- Successors ],
+            [Label,SuccPid,Lookup(SuccPid),0,W,0+W]) || [SuccPid,W] <- Successors ],
             
             % send length message to all successor nodes
             % and set this node as initiator
             Initiator = self(),
-            [ NodeId ! {lengthMessage,self(),W,Initiator} || [NodeId,W] <- Successors],
+            [ SuccPid ! {lengthMessage,self(),W,Initiator} || [SuccPid,W] <- Successors],
             nodeActor(State,{MasterNode,Label,Lookup,Successors,nil,0,length(Successors)});
        
                
@@ -331,10 +362,11 @@ createInverseLookupTable(Pids,Map) ->
 
 %
 % translateGraph():
-% Translates all node labels in a graph (represented as an adjacency list)
+% Translates all vertec labels in a graph (represented as an adjacency list)
 % by using the provided "translation" dictionary / lookup table. 
+% It returns the translated graph.
 %
-% @spec createLookupTable(Graph:list(),Dict::dict()) -> list()
+% @spec createLookupTable(Graph:list(),Dict::dict()) -> list()()
 translateGraph(Graph,Dict) ->
     % translate old Graph with lookup table
     GraphN = lists:map(fun([Label,Vs]) -> [ dict:fetch(Label,Dict), lists:map(fun([K,W]) -> [dict:fetch(K,Dict),W] end,Vs) ] end, Graph),
