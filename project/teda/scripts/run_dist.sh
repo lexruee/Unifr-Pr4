@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # - Starts an Erlang node on each of a desired number of remote hosts
 # - Copies and compiles an Erlang source file on each host
