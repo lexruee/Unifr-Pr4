@@ -1,4 +1,4 @@
--module(cm1).
+-module(cm1_log).
 -export([start/1,nodeActor/0]). 
 
 %
