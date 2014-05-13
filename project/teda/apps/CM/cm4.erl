@@ -1,8 +1,8 @@
--module(cm2).
+-module(cm4).
 -export([start/1,nodeActor/0]). 
 
 %
-% Simplified CM version for non-negative graphs with termination.
+% Simplified CM version for negative graphs without termination.
 % Solution for series 8-10.
 %
 % author:   Alexander Rüedlinger, Michael Jungo
@@ -88,12 +88,14 @@ deployment(Nodes,Graph) ->
 %
 % After the computation is finished it collects the results from all node processes.
 %
-% @spec collect(Pids::list(),Result:list(),Vs::list()) -> any()  
-collect([],Result,Vs) ->
-    Edges = [ [V,W,U] || [V,W,U] <- Result,U/=nil],
-    io:format("\nfinshihed, results:\nnodes: ~p\nedges: ~p\n\n",[Vs,Edges]);
-    
+% @spec collect(Pids::list(),Result:list(),Vs::list()) -> any()     
 collect(Pids,Result,Vs) ->
+    case length(Pids)==0 of
+        true -> Edges = [ [V,W,U] || [V,W,U] <- Result,U/=nil],
+            io:format("\nfinshihed, results:\nnodes: ~p\nedges: ~p\n\n",[Vs,Edges]),
+            collect([nil],Result,Vs);
+        false -> do_nothing
+    end,
     receive
     
         %
@@ -301,10 +303,10 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
             NewNum = Num - 1,
             case NewNum==0 of
                 true -> 
-                        io:format("Num==0, start phase 2, send stop to succs.\n"),
+                        io:format("Num==0, start phase 2, send isOver to succs.\n"),
                         % Phase 2, 
-                        % send stop message to all successor nodes.
-                        [ NodeId ! {stop} || [NodeId,_] <- Successors ],
+                        % send isOver message to all successor nodes.
+                        [ NodeId ! {isOver,Initiator} || [NodeId,_] <- Successors ],
                         nodeActor(terminate,{MasterNode,[Label,D,Lookup(Pred)]});
                 false -> 
                         nodeActor(run,{MasterNode,Label,Lookup,Successors,Pred,D,NewNum})
@@ -313,23 +315,44 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
         %---------------------------------------------------------------
         % Phase 2 for intermediate node, p_j, j>1,
         %---------------------------------------------------------------
-        {stop} ->
-            io:format("received stop..\n",[]),
-            [NodeId ! {stop} || [NodeId,_] <- Successors],
+        {isOver,Initiator} when Initiator/=self(), Num > 0 ->
+            io:format("received isOver..\n",[]),
+            [NodeId ! {over,Initiator} || [NodeId,_] <- Successors],
+            nodeActor(terminate,{MasterNode,[Label,D,Lookup(Pred)]});
+            
+        
+        {over,Initiator} when Initiator/=self(), Num > 0 ->
+            io:format("received over..\n",[]),
+            [NodeId ! {over,Initiator} || [NodeId,_] <- Successors],
     
             nodeActor(terminate,{MasterNode,[Label,D,Lookup(Pred)]});
+            
+        
+        {isOver,Initiator} when Initiator/=self(), Num==0 ->
+            io:format("received isOver..\n",[]),
+            [NodeId ! {isOver,Initiator} || [NodeId,_] <- Successors],
+            nodeActor(terminate,{MasterNode,[Label,D,Lookup(Pred)]});
+            
+        
+        {over,Initiator} when Initiator/=self(), Num==0 ->
+            io:format("received over..\n",[]),
+            [NodeId ! {over,Initiator} || [NodeId,_] <- Successors],
+    
+            nodeActor(terminate,{MasterNode,[Label,D,Lookup(Pred)]});
+            
+            
             
         %---------------------------------------------------------------
         % Phase 2 for initator node, p_j, j=1,
         %---------------------------------------------------------------
             
         % Detect negative cycles as soon as possible.
-        % Send stop message to all successors of this node if
+        % Send over message to all successors of this node if
         % negative cycle has been detected.
         %
         {lengthMessage,P,S,Initiator} when S<0, self()==Initiator ->
-            io:format(">>>>>>>>>>>>>>>>>>>>>> negative cycle detected, ~p!\n",[Lookup(P)]),
-            [ NodeId ! {stop} || [NodeId,_] <- Successors ],
+            io:format(">>>>>>>>>>>>>>>>>>>>>> negative cycle detected, send over, ~p!\n",[Lookup(P)]),
+            [ NodeId ! {over,Initiator} || [NodeId,_] <- Successors ],
             nodeActor(terminate,{MasterNode,[Label,D,Lookup(Pred)]})
     end.
 
