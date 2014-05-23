@@ -1,0 +1,55 @@
+\begin{thebibliography}{8}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Sta()]{Stackoverflow.com}
+{{Stackoverflow.com. New York: Stack Exchange, Inc; 2024}}.
+\newblock URL \url{http://www.stackoverflow.com}.
+
+\bibitem[had()]{hadoop}
+{{Hadoop.apache.org. Forest Hill: The Apache Software Foundation; 2012}}.
+\newblock URL \url{http://hadoop.apache.org/}.
+
+\bibitem[Dean and Ghemawat(2004)]{mapreduce}
+Jeffrey Dean and Sanjay Ghemawat.
+\newblock Mapreduce: Simplied data processing on large clusters.
+\newblock \emph{OSDI'04: Sixth Symposium on Operating System Design and
+  Implementation}, 2004.
+\newblock URL
+  \url{http://static.googleusercontent.com/media/research.google.com/de//archive/mapreduce-osdi04.pdf}.
+
+\bibitem[Holmes(2012)]{holmes2012hadoop}
+Alex Holmes.
+\newblock \emph{Hadoop in practice}.
+\newblock Manning, Shelter Island, NY, 2012.
+\newblock ISBN 1617290238.
+
+\bibitem[Sanjay~Ghemawat and Leung(2003)]{GFS}
+Howard~Gobioff Sanjay~Ghemawat and Shun-Tak Leung.
+\newblock The google file system.
+\newblock \emph{19th ACM Symposium on Operating Systems Principles}, 2003.
+\newblock URL
+  \url{http://static.googleusercontent.com/media/research.google.com/de//archive/gfs-sosp2003.pdf}.
+
+\bibitem[Schmidt(2012)]{schmidt2012raspberry}
+Maik Schmidt.
+\newblock \emph{Raspberry Pi: a quick start guide}.
+\newblock The Pragmatic Bookshelf, Dallas TX, 2012.
+\newblock ISBN 1937785041.
+
+\bibitem[Venner(2009)]{venner2009pro}
+Jason Venner.
+\newblock \emph{Pro Hadoop}.
+\newblock Apress, Berkeley, CA, 2009.
+\newblock ISBN 1430219424.
+
+\bibitem[White(2012)]{white2012hadoop}
+Tom White.
+\newblock \emph{Hadoop : the definitive guide}.
+\newblock O'Reilly, Farnham Sebastopol, Calif, 2012.
+\newblock ISBN 978-1449311520.
+
+\end{thebibliography}
