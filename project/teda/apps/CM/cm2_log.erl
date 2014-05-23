@@ -22,7 +22,7 @@
 start(File) ->
     % read graph topology from file
     Filename = list_to_atom(File),
-    io:format("read file ~p\n",[File]),
+    io:format("read file ~p~n",[File]),
     {ok,Graph} = file:consult(Filename),
     % read nodes list
     {ok,[_|Nodes]} = file:consult('enodes.txt'),
@@ -47,12 +47,13 @@ start(File) ->
 %
 % @spec deployment(Ns::list(),Graph::list()) -> any()
 deployment(Nodes,Graph) ->
-	logger:create("file"),
+	logger:create("file", "test.txt"),
 	logger:attach(),
+	
     % map vertices on nodes
     Map = teda:aggregate(Nodes,Graph),
     Vs = [ V || {_,[V|_]} <- Map ],
-    logger:add("map ~p\n",[Map]),
+    logger:add("map ~p",[Map]),
     
     % deploy node processes
     Pids = [ spawn(N,?MODULE,nodeActor,[]) || {N,_} <- Map ],
@@ -70,7 +71,7 @@ deployment(Nodes,Graph) ->
     
     % distribute inverse lookup table for pids -> v_i translation
     InverseLookupTable = createInverseLookupTable(Pids,Map),
-    logger:add("distribute table: ~p\n",[dict:to_list(InverseLookupTable)]),
+    logger:add("distribute table: ~p",[dict:to_list(InverseLookupTable)]),
     [ Pid ! {lookupTable,dict:to_list(InverseLookupTable)} || Pid <- Pids ],
    
     % set master node for all nodes.
@@ -79,7 +80,7 @@ deployment(Nodes,Graph) ->
     % after 3 seconds start phase 1 and set RootNode as initiator
     [RootNode|_] = Pids,
     erlang:send_after(3000,self(),{init,RootNode}),
-    logger:add("waiting three seconds for deployment...\n"),
+    logger:add("waiting three seconds for deployment..."),
     collect(Pids,[],Vs).
     
 %
@@ -93,7 +94,7 @@ deployment(Nodes,Graph) ->
 % @spec collect(Pids::list(),Result:list(),Vs::list()) -> any()  
 collect([],Result,Vs) ->
     Edges = [ [V,W,U] || [V,W,U] <- Result,U/=nil],
-    logger:add("\nfinshihed, results:\nnodes: ~p\nedges: ~p\n\n",[Vs,Edges]);
+    logger:add("\nfinished, results:\nnodes: ~p\nedges: ~p\n",[Vs,Edges]);
     
 collect(Pids,Result,Vs) ->
     receive
@@ -146,14 +147,14 @@ nodeActor() ->
 %       Successors::list(),Pred::pid(),D::int(),Num::int()}) -> any())
 nodeActor(terminate,{MasterNode,[V,W,Pred]}) ->
     State = [V,W,Pred],
-    logger:add("terminate node ~p, with state: ~p\n",[V,State]),
+    logger:add("terminate node ~p, with state: ~p",[V,State]),
     MasterNode ! {collect,State,self()};
     
 nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
     % print statements for debugging
     case Pred  of
-        nil -> logger:add("~p, ~p, num: ~p, d: ~p, pred: nil\n",[self(),Label,Num,D]);
-        _ -> logger:add("~p, ~p, num: ~p, d: ~p, pred: ~p\n",[self(),Label,Num,D,Lookup(Pred)])
+        nil -> logger:add("~p, ~p, num: ~p, d: ~p, pred: nil",[self(),Label,Num,D]);
+        _ -> logger:add("~p, ~p, num: ~p, d: ~p, pred: ~p",[self(),Label,Num,D,Lookup(Pred)])
     end,
       
     receive
@@ -170,7 +171,7 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
         % Setup successors nodes for this node.
         %
         {successors,NewSuccessors} ->
-            logger:add("~p, ~p, ~p: received successors: ~p\n",
+            logger:add("~p, ~p, ~p: received successors: ~p",
             [Label,node(),self(),NewSuccessors]),
             
             nodeActor(State,{MasterNode,Label,Lookup,NewSuccessors,Pred,D,Num});
@@ -185,10 +186,10 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
                     false ->  dict:fetch(Key,NewLookupTable)
                 end
             end,
-            logger:add("lookup table: ~p\n",[Table]),
+            logger:add("lookup table: ~p",[Table]),
             NewLabel = LookupFun(self()), %dict:fetch(self(),NewLookupTable),
             
-            logger:add("~p, ~p, ~p: received table and label: ~p\n",
+            logger:add("~p, ~p, ~p: received table and label: ~p",
             [Label,node(),self(),NewLabel]),
             
             nodeActor(State,{MasterNode,NewLabel,LookupFun,Successors,Pred,D,Num});
@@ -204,7 +205,7 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
         %
         {lengthMessage,P,S,Initiator} when S<D,Initiator/=self(); D==infinity,Initiator/=self() -> % number < atom 
             % print statements for debugging
-            logger:add("~p, received length message S < D from ~p, ~p \n",[Label,P,Lookup(P)]),
+            logger:add("~p, received length message S < D from ~p, ~p ",[Label,P,Lookup(P)]),
             
             % send an ack to the old predecessor, before changing it.
             case Num > 0 of
@@ -218,7 +219,7 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
             NewD = S,
             
             % print statements for debugging
-            [ logger:add("send length message from ~p to ~p, ~p, s: ~p, w: ~p, s+w: ~p\n",
+            [ logger:add("send length message from ~p to ~p, ~p, s: ~p, w: ~p, s+w: ~p",
             [Label,SuccPid,Lookup(SuccPid),S,W,S+W]) || [SuccPid,W] <- Successors ],
             
             % send length messages to all successors of this node.
@@ -247,7 +248,7 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
         %
         {ack,P,Initiator} when Initiator/=self() ->
             % print statements for debugging
-            logger:add("~p, received ack from ~p, ~p\n",[Label,P,Lookup(P)]),
+            logger:add("~p, received ack from ~p, ~p",[Label,P,Lookup(P)]),
             
             % decrement Num
             NewNum = Num - 1,
@@ -268,10 +269,10 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
         %
         {initiator,MasterNode} ->
             % print statements for debugging
-            logger:add("~p initiates computing, phase 1...\n",[Label]),
+            logger:add("~p initiates computing, phase 1...",[Label]),
             
             % print statements for debugging
-            [ logger:add("send length message from ~p to ~p, ~p, s: ~p, w: ~p, s+w: ~p\n",
+            [ logger:add("send length message from ~p to ~p, ~p, s: ~p, w: ~p, s+w: ~p",
             [Label,SuccPid,Lookup(SuccPid),0,W,0+W]) || [SuccPid,W] <- Successors ],
             
             % send length message to all successor nodes
@@ -298,13 +299,13 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
         % If Num==0 start phase 2.
         %
         {ack,P,Initiator} when Initiator==self() ->
-            logger:add("~p, received ack from ~p, ~p\n",
+            logger:add("~p, received ack from ~p, ~p",
             [Label,P,Lookup(P)]),
             
             NewNum = Num - 1,
             case NewNum==0 of
                 true -> 
-                        logger:add("Num==0, start phase 2, send stop to succs.\n"),
+                        logger:add("Num==0, start phase 2, send stop to succs."),
                         % Phase 2, 
                         % send stop message to all successor nodes.
                         [ NodeId ! {stop} || [NodeId,_] <- Successors ],
@@ -317,7 +318,7 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
         % Phase 2 for intermediate node, p_j, j>1,
         %---------------------------------------------------------------
         {stop} ->
-            logger:add("received stop..\n",[]),
+            logger:add("received stop..",[]),
             [NodeId ! {stop} || [NodeId,_] <- Successors],
     
             nodeActor(terminate,{MasterNode,[Label,D,Lookup(Pred)]});
@@ -331,7 +332,7 @@ nodeActor(State,{MasterNode,Label,Lookup,Successors,Pred,D,Num}) ->
         % negative cycle has been detected.
         %
         {lengthMessage,P,S,Initiator} when S<0, self()==Initiator ->
-            logger:add(">>>>>>>>>>>>>>>>>>>>>> negative cycle detected, ~p!\n",[Lookup(P)]),
+            logger:add(">>>>>>>>>>>>>>>>>>>>>> negative cycle detected, ~p!",[Lookup(P)]),
             [ NodeId ! {stop} || [NodeId,_] <- Successors ],
             nodeActor(terminate,{MasterNode,[Label,D,Lookup(Pred)]})
     end.
@@ -373,5 +374,5 @@ createInverseLookupTable(Pids,Map) ->
 translateGraph(Graph,Dict) ->
     % translate old Graph with lookup table
     GraphN = lists:map(fun([Label,Vs]) -> [ dict:fetch(Label,Dict), lists:map(fun([K,W]) -> [dict:fetch(K,Dict),W] end,Vs) ] end, Graph),
-    logger:add("GN: ~p\n",[GraphN]),
+    logger:add("GN: ~p",[GraphN]),
     GraphN.
