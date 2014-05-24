@@ -8,7 +8,6 @@
 #
 # 
 require 'pathname'
-require 'open3'
 
 module Vendetta
     
