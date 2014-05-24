@@ -105,11 +105,6 @@ module Vendetta
         # get app name and package name
         app, package = a_hash[:app], a_hash[:package]
         puts "deploy #{package}/#{app} on the cluster..."
-
-        # if not hosts are provided then use default hosts
-        if a_hash[:hosts].nil?
-            a_hash[:hosts] = read_hosts(@@default_hosts)
-        end
     
         # package the app
         a_hash[:file] = package(a_hash)
@@ -145,16 +140,25 @@ module Vendetta
     
     #
     # Runs an app from the folder /apps/{app}
-    # a_hash = { :package => package,:app => app, :function =>function, :max_hosts => n }
+    # a_hash = { :package => package,:app => app, :function =>function, :max_hosts => n, :host_file => path to host file}
     #
     def run(a_hash)
         app = a_hash[:app]
         package = a_hash[:package]
         function = a_hash[:function]
         max_hosts = a_hash[:max_hosts]
+        
+        # if hosts file is not provided then use default hosts file
+        if a_hash[:host_file].nil?
+            hosts = read_hosts(@@default_hosts)
+        else
+            hosts = read_hosts(a_hash[:host_file])
+        end
+        
+        
         begin
-            hosts = deploy(:app => app, :package => package, :max_hosts => max_hosts)
-            start_master(:package => package,:app => app, :function => function,:hosts => hosts, :max_hosts => max_hosts)
+            deployed_hosts = deploy(:app => app, :package => package, :hosts => hosts, :max_hosts => max_hosts)
+            start_master(:package => package,:app => app, :function => function,:hosts => deployed_hosts, :max_hosts => max_hosts)
         rescue SystemExit
             puts "add some nodes to your cluster! Need %s nodes!" % max_hosts
         end
@@ -162,6 +166,7 @@ module Vendetta
     
     #
     # Starts the master node which is responsible for the deployment.
+    # a_hash = {:app => app, :package => package, :function => function, :hosts }
     #
     def start_master(a_hash)
         host = `uname -n`.chomp # get host name
@@ -205,6 +210,7 @@ module Vendetta
     
     #
     # Start all nodes on all hosts.
+    # a_hash = {:hosts => hosts, :max_hosts => max_hosts, :app => app, :package => package }
     #
     def start_nodes(a_hash)
         hosts = a_hash[:hosts]
@@ -223,6 +229,7 @@ module Vendetta
     
     #
     # Start node on host.
+    # a_host = {:user => user, :host => host }
     #
     def start_node(a_host)
         run_cmd = 'erl -noshell -eval "io:format(\"~p~n\",[erlang:system_info(process_limit)]),init:stop()."'

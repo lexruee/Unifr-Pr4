@@ -16,7 +16,8 @@ conf = {
     :package => "vendetta",
     :app => "CM",
     :function => "cm2:start(\"./graphs/graph.txt\")",
-    :max_hosts => 5
+    :max_hosts => 5,
+    :host_file => "./conf/hosts.txt"
 }
 
 # run the config
