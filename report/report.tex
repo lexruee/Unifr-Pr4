@@ -1,13 +1,20 @@
+%&pdflatex
 \documentclass[10pt,a4wide]{article}
-\usepackage[utf8]{inputenc}
-\usepackage[english]{babel}
-\usepackage{amsmath}
-\usepackage{amsfonts}
-\usepackage{amssymb}
-\usepackage{setspace}
+
+\usepackage[english]{babel} 
 \usepackage[pdftex]{graphicx}
-\usepackage{url}
+\usepackage[utf8]{inputenc}
+\usepackage{hyperref}
 \usepackage{listings}
+\usepackage{geometry}            
+\usepackage{epstopdf}
+\usepackage{makeidx}
+\usepackage{unifrbr}
+\usepackage{color}
+\usepackage{amssymb}
+\usepackage{longtable}
+\usepackage{listings}
+\usepackage{setspace}
 \usepackage{subfigure}
 \usepackage{a4wide}
 \lstset{
@@ -15,7 +22,6 @@
 }
 
 \usepackage{nameref}
-
 
 \usepackage[round]{natbib}
 \usepackage{bibentry}
@@ -25,7 +31,7 @@
 \pagenumbering{gobble} % switch off page numbering
 \onehalfspacing 
 \begin{titlepage}
-\author{Michael Jungo\footnote{michael.jungo@unifr.ch} \\ 07-917-099 \\ Alexander Rüedlinger\footnote{alexander.rueedlinger@unifr.ch} \\ 08-129-710\\ }
+\author{Michael Jungo\footnote{michael.jungo@unifr.ch} \\ 12-212-981 \\ Alexander Rüedlinger\footnote{alexander.rueedlinger@unifr.ch} \\ 08-129-710\\ }
 \title{Project 4 \\ \ \vspace{0.5em} Introducing Logging Functionality and the Venteda-Testbed for distributed computing }
 
 \date{\today}
@@ -48,8 +54,12 @@ In this paper we introduce logging functionality to extend the exsiting erlang \
 
 \section{Challenge}
 \subsection{Logging Library}
-TODO
-\newpage
+The logging library is an approach to add a compact method for debugging purposes. This allows to add messages to the logger, which are written to the desired output.
+
+Another tool it provides, is the logging of messages sent between processes in a distributed environment. This functionality is useful to make sure message are received correctly.
+
+It was also very important for us to maintain the concept of a library, which should be accessible as simple as possible and without having to change a lot of code.
+Especially in a functional programming language like Erlang, where it is usually needed to provide most of the informations in form of messages or function calls.
 
 \subsection{Testbed and Deployment Library}
 One part of the challenge consisted in building a deployment library and a testbed for testing distributed algorithms. It appears maybe at first glance to be a diffcult task. In this paper we show that's not the case. The main ingredients for builiding our \texttt{venteda} testbed are:
@@ -66,10 +76,48 @@ We used the Ruby Programming Language for implementing the \texttt{venteda} depl
 
 \section{Approach}
 \subsection{Logging}
-TODO
-\newpage
-TODO
-\newpage
+\paragraph{General}
+In order to get a combined logging function within a distributed system, the remote processes need to communicate. But as it is difficult to get them in the correct order, we decided to have a centralized logger.
+This centralized logger is a process created by one machine, and every other process will send the messages to it. 
+\begin{itemize}
+\itemsep0em 
+\item To determine the order of messages an implementation of the \texttt{Lamport Clock} is used.
+\item To track messages that have been sent between processes the erlang module \texttt{seq\_trace} is used.
+\end{itemize}
+
+\paragraph{Sequential Tracing}
+Sequential tracing is used to track messages that have been sent.
+The Erlang module seq\_trace\footnote{See \url{http://erlang.org/doc/man/seq\_trace.html}} provides the functions to intercept the message and add them a token. This token contains informations about the sender, receiver and the messages that is transmitted.
+A process has to be set as the system tracer which will receive every message containing a certain token. This process decides what will be done with the messages.
+A system tracer is only locally active and will only trace messages from local processes.
+
+\paragraph{Lamport Clock}
+The Lamport Clock is a logical clock which uses the happened-before relation. Whenever a message is received, the clock of the recipient is compared to the clock from the transmitter. The clock then gets updated to the maximum value of both and gets incremented.
+\begin{figure}[!htb]
+\includegraphics[scale=0.6]{png/lamport_clock.png} 
+\centering
+\caption{Lamport Clock example}
+\end{figure}
+
+\paragraph{Implementation}
+The first step is to create a logger, which is a new process on the machine who invoked it. Whoever creates the logger will get the output of the log.
+After the creation every other process which should be able to use the logging service has to be attached to the logger. This will enable the option to add messages to the log and also activate the tracing of the messages sent.
+It is also possible to detach a process so that it will be excluded from the logging service and therefore also disable the tracing.
+
+When a process is attached to the logger, the token for the tracing and the system tracer will be set. If no system tracer is currently available then a new process is created which is responsible for every process on this machine.
+Every system tracer will communicate with the logger. If the implementation of seq\_trace would allow to set a remote process as the system tracer the logger could simply bet set on every machine, because the only thing they currently do is forwarding the messages to the logger.\\
+
+The following functions are part of the logger:
+\begin{itemize}
+\itemsep0em
+\item create/1  -  creates a new logger, with the output format "console" or "file" as argument
+\item create/2  -  creates a new logger, with the output format "file" and the filename as arguments
+\item attach/0  -  attaches the process to the logger and sets the system tracer
+\item detach/0	-  detaches the process from the logger
+\item add/1		-  adds a message given from the argument to the log
+\item add/2		-  adds a message given from the arguments (same syntax as io:format/2\footnote{See \url{http://erlang.org/doc/man/io.html\#format-2}}) to the log
+\end{itemize}
+
 \subsection{Testbed}
 \paragraph{Hardware}
 The \texttt{venteda} testbed is bulit upon Raspberry Pis. A Raspberry Pi is a cheap credit-card sized single-board computer. There are two models available - model A and model B. For our purposes we used the model B which costs around 55 swiss francs. It includes a single 700 MHz ARM CPU, 512 megabytes of RAM, a Fast Ethernet (10/100 MB) LAN port and a SD card slot. The operating system and the user data are stored on a 8 GB SD flash card. 
@@ -120,7 +168,37 @@ For the sake of completeness the list below describes the implemeted deployment 
 \section{Results}
 \subsection{Logger}
 \subsubsection{Example Usage}
+Process A
+\begin{lstlisting}
+logger:create(file, myLog.txt),
+logger:attach(),
+logger:add("This is a message"),
+logger:add("This is also a ~p", ["Message"]).
+\end{lstlisting}
+Process B
+\begin{lstlisting}
+logger:attach(),
+logger:add("Message from B"),
+A ! {msg, "Hi"}.
+\end{lstlisting}
+
 \subsubsection{Example Ouptut}
+\begin{lstlisting}
+2 - <0.46.0>
+This is a message
+3 - <0.46.0>
+This is also a "Message"
+4 - <0.47.0>
+Message from B
+4 - <0.47.0> -> <0.46.0> - TRACE
+{msg, "Hi"}
+\end{lstlisting}
+
+\begin{figure}[!htb]
+\includegraphics[scale=0.35]{png/logger_sequence.png} 
+\centering
+\caption{Sequence diagram of the logger}
+\end{figure}
 
 \subsection{Testbed}
 The \texttt{venteda} testbed was tested using the implemented Chandy-Misra-Algorithm with termination from the previous exercise series $8-10$. The next figure a) shows the behaviour of the testbed by varying the number of nodes for three different input sizes. The input sizes corresponds to the number of vertices of a graph that was randomly generated. The figure b) shows the speedup of the testbed with different number of nodes. The speedup was evaluated using the Chandy-Misra-Algorithm applied on a random graph with 100 vertices.
