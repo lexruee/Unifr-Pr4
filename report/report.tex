@@ -41,9 +41,12 @@ In this paper we introduce logging functionality to extend the exsiting erlang \
 
 
 \section{Challenge}
-\subsection{Logging}
-\subsection{Testbed}
-Building a testbed for testing distributed algorithms appears maybe at first glance to be a diffcult task. In this paper we show that's not the case. The main ingredients for builiding a testbed are:
+\subsection{Logging Library}
+TODO
+\newpage
+
+\subsection{Testbed and Deployment Library}
+One part of the challenge consisted in building a deployment library and a testbed for testing distributed algorithms. It appears maybe at first glance to be a diffcult task. In this paper we show that's not the case. The main ingredients for builiding our \texttt{venteda} testbed are:
 \begin{itemize}
 \itemsep0em 
 \item some cheap computers
@@ -51,12 +54,16 @@ Building a testbed for testing distributed algorithms appears maybe at first gla
 \item basic linux tools like scp, ssh and tar
 \item adding a public rsa key to each hosts' \texttt{authorized\_keys} file allowing  an admin host to login without the need to enter a password
 \item a switch to connect all machines and some Ethernet Cat. 5e cables 
-\item a simple distribution / deployment platform written in a scripting language like Ruby or Python
+\item a simple deployment platform written in a scripting language like Ruby or Python
 \end{itemize}
+We used the Ruby Programming Language for implementing the deployment library because it facilitates to write system administration tasks on a higher level of abstraction which is more concise and less error prone compared to shell scripting. Other advantages are that the implemeted deployment library can be easiliy reused in other projects and does not rely on a specific shell like bash or dash.
 
 \section{Approach}
 \subsection{Logging}
-
+TODO
+\newpage
+TODO
+\newpage
 \subsection{Testbed}
 \paragraph{Hardware}
 The \texttt{venteda} testbed is bulit upon Raspberry Pis. A Raspberry Pi is a cheap credit-card sized single-board computer. There are two models available - model A and model B. For our purposes we used the model B which costs around 55 swiss francs. It includes a single 700 MHz ARM CPU, 512 megabytes of RAM, a Fast Ethernet (10/100 MB) LAN port and a SD card slot. The operating system and the user data are stored on a 8 GB SD flash card. 
