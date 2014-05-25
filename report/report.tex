@@ -87,8 +87,8 @@ The cluster is managed and controlled by a notebook. Additionally, we establishe
 By means of this network configuration we are able to run our Raspberry Pi cluster in the University network without the need to setup the internet connection for each host.
 
 \paragraph{Deployment Software}
-As already mentioned the \texttt{teda} distribution provides already some shell scripts to deploy erlang programs on multiple hosts in a network. We used the shell script \texttt{run\_dist.sh} as a starting point. To keep the report short we just sketch the implementaion of our testbed deployment software \texttt{venteda}.
-We reimplemented the basic deployment steps in the previous mentioned shell script in a library called Venteda using the Ruby Programming Language. The different steps in the deployment process were implemented as separate functions.
+As already mentioned the \texttt{teda} distribution provides already some shell scripts to deploy erlang programs on multiple hosts in a network. We used the shell script \texttt{run\_dist.sh} as a starting point. To keep the report short we just sketch the implementaion of our testbed deployment library \texttt{venteda}.
+We reimplemented the basic deployment steps in the previous mentioned shell script in a library called \texttt{venteda} using the Ruby Programming Language. The different steps in the deployment process were implemented as separate functions.
 The next figure shows the sequential workflow of the implemented deployment pipeline.
 \begin{figure}[!htb]
 \centering
