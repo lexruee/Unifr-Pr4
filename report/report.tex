@@ -31,14 +31,13 @@
 \newpage
 \pagenumbering{arabic} % switch oon arabic page numbers (and reset to 1)
 \section{Introduction}
-In the second part of the lecture Concurrent, Parallel and Distributed Computing we faced three problems to solve the first challenge that involved to implement the Chandy-Misra-Aglorithm.
+In the second part of the lecture Concurrent, Parallel and Distributed Computing we faced three problems to solve the first challenge that consisted of implementing the Chandy-Misra-Aglorithm.
 
-For debugging we used a lot of print statements. So it was obvious that a logging library would be a good idea as a challenge. But besides that we needed a reliable way to test our distributed programs in a real cluster. Unfortunately, the provided linux hosts in the Perolles X building were not always available. Additionally, the teda distributtion for deploying erlang programs was a little bit buggy and not suitable for our purposes.
+For debugging we used a lot of print statements. So it was obvious that a logging library would be a good idea as a challenge. But besides that we needed a reliable way to test our distributed programs in a real cluster. Unfortunately, the provided linux hosts in the Perolles 21 building were not always available. Additionally, the \texttt{teda} distributtion for deploying erlang programs was a little bit buggy and not suitable for our purposes.
 
-Instead of giving up we made a virtue of necessity. So we developed a distributed logger module and we built our own testbed for testing distributed algorithms, which completety avoids the usage of the provided shells scripts in the teda distribution.
+Instead of giving up we made a virtue of necessity. That's the reason why our challenge is focused on logging and setting up an testing environement.
 
-
-In this paper we introduce logging functionality to extend the exsiting teda library and a cheap testbed for testing distributed algorithms.
+In this paper we introduce logging functionality to extend the exsiting erlang \texttt{teda} library and the cheap \texttt{venteda} testbed for testing distributed algorithms.
 
 
 \section{Challenge}
@@ -50,7 +49,8 @@ Building a testbed for testing distributed algorithms appears maybe at first gla
 \item some cheap computers
 \item a free Unix-like operating system
 \item basic linux tools like scp, ssh and tar
-\item a switch to connect all machines together
+\item adding a public rsa key to each hosts' \texttt{authorized\_keys} file allowing  an admin host to login without the need to enter a password
+\item a switch to connect all machines and some Ethernet Cat. 5e cables 
 \item a simple distribution / deployment platform written in a scripting language like Ruby or Python
 \end{itemize}
 
@@ -59,12 +59,12 @@ Building a testbed for testing distributed algorithms appears maybe at first gla
 
 \subsection{Testbed}
 \paragraph{Hardware}
-The testbed is bulit upon Raspberry Pis. A Raspberry Pi is a cheap credit-card sized single-board computer. There are two models available - model A and model B. For our purposes we used the model B which costs around 55 swiss francs. It includes a single 700 MHz ARM CPU, 512 megabytes of RAM, a Fast Ethernet (10/100 MB) LAN port and a SD card slot. The operating system and the user data are stored on a 8 GB SD flash card. 
+The \texttt{venteda} testbed is bulit upon Raspberry Pis. A Raspberry Pi is a cheap credit-card sized single-board computer. There are two models available - model A and model B. For our purposes we used the model B which costs around 55 swiss francs. It includes a single 700 MHz ARM CPU, 512 megabytes of RAM, a Fast Ethernet (10/100 MB) LAN port and a SD card slot. The operating system and the user data are stored on a 8 GB SD flash card. 
 
 As operating system we chosed the Debian-based Raspian os which is optimized for the Raspberry Pi hardware.
 
 
-The testbed cluster consists of nine Raspberry Pi devices. Such a cluster is sometimes denoted as Beowulf cluster\footnote{A Beowulf cluster is a computer cluster of identical, commodity computers.} or as Bramble\footnote{See \url{http://elinux.org/Bramble}} in the Raspberry Pi community.
+The testbed is a cluster that consists of nine Raspberry Pi devices. Such a cluster is sometimes denoted as Beowulf cluster\footnote{A Beowulf cluster is a computer cluster of identical, commodity computers.} or as Bramble\footnote{See \url{http://elinux.org/Bramble}} in the Raspberry Pi community.
 
 
 \paragraph{Network Setup}
@@ -80,25 +80,28 @@ The cluster is managed and controlled by a notebook. Additionally, we establishe
 By means of this network configuration we are able to run our Raspberry Pi cluster in the University network without the need to setup the internet connection for each host.
 
 \paragraph{Deployment Software}
-As already mentioned the \texttt{teda} distribution provides already some shell scripts to deploy erlang programs on multiple hosts in a network. We used the shell script \texttt{run\_dist.sh} as a starting point.
+As already mentioned the \texttt{teda} distribution provides already some shell scripts to deploy erlang programs on multiple hosts in a network. We used the shell script \texttt{run\_dist.sh} as a starting point. To keep the report short we just sketch the implementaion of our testbed deployment software \texttt{venteda}.
 We reimplemented the basic deployment steps in the previous mentioned shell script in a library called Venteda using the Ruby Programming Language. The different steps in the deployment process were implemented as separate functions.
-The next figure shows the workflow of the implemented deployment pipeline.
+The next figure shows the sequential workflow of the implemented deployment pipeline.
 \begin{figure}[!htb]
 \centering
 \includegraphics[scale=0.5]{png/deployment_process.png}
 \caption{Deployment pipeline} 
 \end{figure}
 
+
+For the sake of completeness the list below describes the implemeted deployment functions without going to much into the details.
 \begin{itemize}
 \itemsep0em
+\item run() - launches an erlang application on the testbed 
 \item read\_hosts() - reads a host file, specifies the hosts in the tesbed
-\item upload\_file() - uploads a file using scp on a single host
-\item dsitribute() -  distributes a file on the testbed
 \item package() - archives an application using tar
+\item dsitribute() -  distributes a file on the testbed
+\item upload\_file() - uploads a file using scp on a single host
 \item unpack() - extracts the content of an archived application
 \item start\_master() - starts the master erlang node
 \item start\_nodes() - starts all erlang nodes
-\item run() - launches an erlang application on the testbed 
+
 \end{itemize}
 
 \section{Results}
