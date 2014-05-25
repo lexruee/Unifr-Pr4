@@ -1,4 +1,4 @@
-\documentclass[10pt,a4paper]{article}
+\documentclass[10pt,a4wide]{article}
 \usepackage[utf8]{inputenc}
 \usepackage[english]{babel}
 \usepackage{amsmath}
@@ -8,6 +8,12 @@
 \usepackage[pdftex]{graphicx}
 \usepackage{url}
 \usepackage{listings}
+\usepackage{subfigure}
+\usepackage{a4wide}
+\lstset{
+  basicstyle=\footnotesize
+}
+
 \usepackage{nameref}
 
 
@@ -31,13 +37,13 @@
 \newpage
 \pagenumbering{arabic} % switch oon arabic page numbers (and reset to 1)
 \section{Introduction}
-In the second part of the lecture Concurrent, Parallel and Distributed Computing we faced three problems to solve the first challenge that consisted of implementing the Chandy-Misra-Aglorithm.
+In the second part of the lecture Concurrent, Parallel and Distributed Computing we faced three problems to solve the first challenge that consisted of implementing the Chandy-Misra-Algorithm.
 
 For debugging we used a lot of print statements. So it was obvious that a logging library would be a good idea as a challenge. But besides that we needed a reliable way to test our distributed programs in a real cluster. Unfortunately, the provided linux hosts in the Perolles 21 building were not always available. Additionally, the \texttt{teda} distributtion for deploying erlang programs was a little bit buggy and not suitable for our purposes.
 
 Instead of giving up we made a virtue of necessity. That's the reason why our challenge is focused on logging and setting up an testing environement.
 
-In this paper we introduce logging functionality to extend the exsiting erlang \texttt{teda} library and the cheap \texttt{venteda} testbed for testing distributed algorithms.
+In this paper we introduce logging functionality to extend the exsiting erlang \texttt{teda} library and the \texttt{venteda} testbed for testing distributed algorithms.
 
 
 \section{Challenge}
@@ -52,11 +58,11 @@ One part of the challenge consisted in building a deployment library and a testb
 \item some cheap computers
 \item a free Unix-like operating system
 \item basic linux tools like scp, ssh and tar
-\item adding a public rsa key to each hosts' \texttt{authorized\_keys} file allowing  an admin host to login without the need to enter a password
+\item adding a public ssh rsa key to each hosts' \texttt{authorized\_keys} file allowing an admin host to login via ssh without entering a password
 \item a switch to connect all machines and some Ethernet Cat. 5e cables 
 \item a simple deployment platform written in a scripting language like Ruby or Python
 \end{itemize}
-We used the Ruby Programming Language for implementing the deployment library because it facilitates to write system administration tasks on a higher level of abstraction which is more concise and less error prone compared to shell scripting. Other advantages are that the implemeted deployment library can be easiliy reused in other projects and does not rely on a specific shell like bash or dash.
+We used the Ruby Programming Language for implementing the \texttt{venteda} deployment library. Ruby facilitates to write system administration tasks on a higher level of abstraction which is more concise and less error prone compared to shell scripting. Other advantages are that \texttt{venteda} can be easiliy reused in other projects, does not rely on a specific shell like bash or dash and is faster in the deployment of an application on multiple hosts due the usage of threads.
 
 \section{Approach}
 \subsection{Logging}
@@ -86,7 +92,7 @@ For simplicity reasons we used a static network configuration. We connected each
 The cluster is managed and controlled by a notebook. Additionally, we established a shared internet connection via the notbooks WiFi connection, allowing each host in the cluster to access the internet. 
 By means of this network configuration we are able to run our Raspberry Pi cluster in the University network without the need to setup the internet connection for each host.
 
-\paragraph{Deployment Software}
+\paragraph{Deployment Library}
 As already mentioned the \texttt{teda} distribution provides already some shell scripts to deploy erlang programs on multiple hosts in a network. We used the shell script \texttt{run\_dist.sh} as a starting point. To keep the report short we just sketch the implementaion of our testbed deployment library \texttt{venteda}.
 We reimplemented the basic deployment steps in the previous mentioned shell script in a library called \texttt{venteda} using the Ruby Programming Language. The different steps in the deployment process were implemented as separate functions.
 The next figure shows the sequential workflow of the implemented deployment pipeline.
@@ -101,7 +107,7 @@ For the sake of completeness the list below describes the implemeted deployment 
 \begin{itemize}
 \itemsep0em
 \item run() - launches an erlang application on the testbed 
-\item read\_hosts() - reads a host file, specifies the hosts in the tesbed
+\item read\_hosts() - reads a host file which specifies the hosts in the testbed
 \item package() - archives an application using tar
 \item dsitribute() -  distributes a file on the testbed
 \item upload\_file() - uploads a file using scp on a single host
@@ -112,7 +118,26 @@ For the sake of completeness the list below describes the implemeted deployment 
 \end{itemize}
 
 \section{Results}
+\subsection{Logger}
+\subsubsection{Example Usage}
+\subsubsection{Example Ouptut}
+
+\subsection{Testbed}
+The \texttt{venteda} testbed was tested using the implemented Chandy-Misra-Algorithm with termination from the previous exercise series $8-10$. The next figure a) shows the behaviour of the testbed by varying the number of nodes for three different input sizes. The input sizes corresponds to the number of vertices of a graph that was randomly generated. The figure b) shows the speedup of the testbed with different number of nodes. The speedup was evaluated using the Chandy-Misra-Algorithm applied on a random graph with 100 vertices.
+
+\begin{figure}[!htb]
+\centering
+\hfill
+\subfigure[Execution times]{\includegraphics[width=7.2cm]{results/execution_times.png}}
+\hfill
+\centering
+\subfigure[Speedup]{\includegraphics[width=7.2cm]{results/speedup.png}}
+\hfill
+\end{figure}
+
+\newpage
 \section{Conclusion}
+
 
 As a final recommendation we would like to advocate for the use of Raspberry Pis in academia. They are great tool for learning how distributed systems work and they are very versatile, given you are not discouraged by the tinkering of the machines or the software that is required to get the most out of it's hardware.
 
