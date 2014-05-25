@@ -37,32 +37,37 @@ ascii = <<END
    - `ssNMmhhoo-`   
       ` yo` - .     
         `.    `     
+
 END
 
+begin
+    puts ascii
+    $ARGV = ARGV
+    if $ARGV.size==0
+        puts "usage: start.rb package app function [function arg, [max hosts]]"
+        exit
+    end
 
-puts ascii
-$ARGV = ARGV
-if $ARGV.size==1
-    exit
+    if $ARGV[3].nil?
+        $ARGV[3] = ""
+    end
+
+    if $ARGV[4].nil?
+        $ARGV[4] = 1
+    end
+
+    conf = {
+        :package => $ARGV[0],
+        :app => $ARGV[1],
+        :function => $ARGV[2] + "(\"#{$ARGV[3]}\")",
+        :max_hosts => $ARGV[4].to_i
+    }
+    puts "run config:"
+    puts conf
+    
+    Venteda::run(conf)
+rescue SystemExit
+    #do nothing
 end
-
-if $ARGV[3].nil?
-    $ARGV[3] = ""
-end
-
-if $ARGV[4].nil?
-    $ARGV[4] = 1
-end
-
-conf = {
-    :package => $ARGV[1],
-    :app => $ARGV[1],
-    :function => $ARGV[2] + "(\"#{$ARGV[3]}\")",
-    :max_hosts => $ARGV[4].to_i
-}
-puts "run config:"
-puts conf
-
-Venteda::run(conf)
 
 

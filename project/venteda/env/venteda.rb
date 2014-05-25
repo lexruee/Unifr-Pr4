@@ -3,8 +3,8 @@
 # author:   Alexander Rüedlinger, Michael Jungo
 # date:     2014
 #
-# This library can used as a simple distribution platform
-# to distribute and to deploy erlang applications in small cluster. 
+# This library can be used as a simple distribution platform
+# to distribute and to deploy erlang applications for a small cluster. 
 #
 # 
 require 'pathname'
@@ -21,6 +21,8 @@ module Venteda
     @@app_dir = @@vendetta_dir + "/apps"
     @@default_hosts = @@vendetta_dir + "/conf/hosts.txt"
     @@cookie = "abc"
+    @@start_time = nil
+    @@end_time = nil
 
     #
     # Reads a host file and returns a list of hosts.
@@ -173,6 +175,7 @@ module Venteda
         hosts = a_hash[:hosts]
         app = a_hash[:app]
         function = a_hash[:function]
+        @@start_time = Time.now
         nodes = start_nodes(a_hash)
         
         # create enodes.txt file and save it in local app folder
@@ -187,7 +190,7 @@ module Venteda
         `cd  #{@@app_dir}/#{app} && erl -noshell -eval 'make:all(),init:stop().'`
         # cd to local app folder and run the env/run.sh script
         system "cd #{@@app_dir}/#{app} && sh #{@@vendetta_env_dir}/run.sh #{@@cookie} '#{function}'"
-        
+        @@end_time = Time.noew
         # shut down all nodes
         puts "Terminate nodes..."
         cmd = ""
@@ -204,6 +207,9 @@ module Venteda
         end
         puts "Kill local port mapper"
         `epmd -kill`
+        
+        puts "Execution time: #{@@end_time - @@start_time} seconds"
+        
         return ""
     end
     
