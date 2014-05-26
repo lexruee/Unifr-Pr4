@@ -60,8 +60,15 @@ module Venteda
     def distribute(a_hash)
         hosts = a_hash[:hosts]
         file = a_hash[:file]
+        ts = []
         hosts.each do |host|
+            ts << Thread.new {
             upload_file(:file => file, :host => host)
+            }
+        end
+        
+        ts.each do |t|
+            t.join
         end
     end
     
@@ -120,14 +127,27 @@ module Venteda
         hosts = a_hash[:hosts][0...a_hash[:max_hosts]]
         # unpack the package on each node
         puts "unpack package #{package}..."
+        ts1 = []
         hosts.each do |host|
-            unpack(host,package_filename)
+            ts1 << Thread.new {
+                unpack(host,package_filename)
+            }
+        end
+        ts1.each do |t|
+            t.join
         end
         
+        ts2 = []
         hosts.each do |host|
-            compile(host,package,app)
-            puts "package/app: #{package}/#{app} - deployed on host: #{host[:host]}"
+            ts2 << Thread.new {
+                compile(host,package,app)
+                puts "package/app: #{package}/#{app} - deployed on host: #{host[:host]}"
+            }
         end
+        ts2.each do |t|
+            t.join
+        end
+        
         return hosts #return nodes where the app is deployed
     end
     
@@ -175,7 +195,7 @@ module Venteda
         hosts = a_hash[:hosts]
         app = a_hash[:app]
         function = a_hash[:function]
-        @@start_time = Time.now
+        
         nodes = start_nodes(a_hash)
         
         # create enodes.txt file and save it in local app folder
@@ -189,8 +209,9 @@ module Venteda
         # compile local app
         `cd  #{@@app_dir}/#{app} && erl -noshell -eval 'make:all(),init:stop().'`
         # cd to local app folder and run the env/run.sh script
+        @@start_time = Time.now
         system "cd #{@@app_dir}/#{app} && sh #{@@vendetta_env_dir}/run.sh #{@@cookie} '#{function}'"
-        @@end_time = Time.noew
+        @@end_time = Time.now
         # shut down all nodes
         puts "Terminate nodes..."
         cmd = ""
@@ -224,11 +245,19 @@ module Venteda
             exit
         end
         nodes = Array.new
+        ts = Array.new
         hosts.each do |host|
             host[:app] = a_hash[:app]
-            host[:package] = a_hash[:package]
-            nodes << start_node(host)
+             ts << Thread.new {
+                host[:package] = a_hash[:package]
+                nodes << start_node(host)
+            }
         end
+        
+        ts.each do |t|
+            t.join
+        end
+        
         return nodes
     end
     
